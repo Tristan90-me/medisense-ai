@@ -1,0 +1,76 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #f0f6ff;
+  color: #1e293b;
+  min-height: 100vh;
+}
+a { text-decoration: none; color: inherit; }
+button { font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+
+/* Shared form styles */
+.auth-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+}
+.auth-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 0.5px solid #e2e8f0;
+  padding: 2rem;
+  width: 100%;
+  max-width: 420px;
+}
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+.auth-logo-icon {
+  width: 36px; height: 36px;
+  background: #3b82f6;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.auth-logo-name { font-size: 18px; font-weight: 600; color: #1e3a5f; }
+.auth-title { font-size: 20px; font-weight: 600; color: #1e3a5f; margin-bottom: 0.25rem; }
+.auth-subtitle { font-size: 13px; color: #64748b; margin-bottom: 1.5rem; }
+.form-group { margin-bottom: 1rem; }
+.form-label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 5px; }
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus { border-color: #3b82f6; background: #fff; }
+.form-error { font-size: 11px; color: #ef4444; margin-top: 4px; }
+.btn-blue {
+  width: 100%;
+  padding: 11px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 0.5rem;
+}
+.btn-blue:hover { background: #2563eb; }
+.btn-blue:disabled { background: #93c5fd; cursor: not-allowed; }
+.auth-switch { text-align: center; font-size: 13px; color: #64748b; margin-top: 1rem; }
+.auth-switch a { color: #3b82f6; font-weight: 500; }
