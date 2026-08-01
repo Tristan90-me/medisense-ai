@@ -5,11 +5,15 @@ import api from '../api/axios';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const { user, token, isAuthenticated, setAuth, logout, updateUser } = useAuthStore();
+  const {
+    user, token, isAuthenticated, deviceToken,
+    pendingEmail, setAuth, setDeviceToken,
+    setPendingEmail, logout, updateUser,
+  } = useAuthStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const verifyToken = async () => {
+    const verify = async () => {
       const storedToken = localStorage.getItem('token');
       if (storedToken) {
         try {
@@ -21,11 +25,14 @@ export const AuthProvider = ({ children }) => {
       }
       setLoading(false);
     };
-    verifyToken();
+    verify();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, setAuth, logout }}>
+    <AuthContext.Provider value={{
+      user, token, isAuthenticated, loading, deviceToken,
+      pendingEmail, setAuth, setDeviceToken, setPendingEmail, logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

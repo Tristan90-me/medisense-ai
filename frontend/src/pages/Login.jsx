@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { Activity } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 
 export default function Login() {
-  const { setAuth } = useAuth();
+  const { setAuth, setDeviceToken, setPendingEmail, deviceToken } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
@@ -15,12 +15,29 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', form);
-      setAuth(res.data.user, res.data.token);
-      toast.success('Welcome back!');
-      navigate('/dashboard');
+      const res = await api.post('/auth/login', {
+        email: form.email,
+        password: form.password,
+        deviceToken,
+      });
+
+      if (res.data.step === 'done') {
+        setAuth(res.data.user, res.data.token);
+        toast.success('Welcome back!');
+        navigate('/dashboard');
+      } else {
+        setPendingEmail(form.email);
+        navigate('/verify-otp');
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      const msg = err.response?.data?.message || 'Login failed';
+      const code = err.response?.data?.code;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        toast.error(msg);
+        navigate('/check-email', { state: { email: form.email } });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
