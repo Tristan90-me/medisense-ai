@@ -14,6 +14,7 @@ app.use(express.json());
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/profile', require('./routes/profile'));
+app.use('/api/ai', require('./routes/ai'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'MediSense API running' }));
 

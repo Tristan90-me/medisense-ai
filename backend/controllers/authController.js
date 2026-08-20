@@ -18,7 +18,12 @@ exports.register = async (req, res) => {
     if (exists)
       return res.status(400).json({ success: false, message: 'Email already registered' });
 
-    const user = await User.create({ name, email, password });
+    const user = await User.create({ 
+      name, 
+      email, 
+      password,
+      isEmailVerified: true
+    });
     await HealthProfile.create({ user: user._id });
 
     const rawToken = user.generateVerifyToken();
