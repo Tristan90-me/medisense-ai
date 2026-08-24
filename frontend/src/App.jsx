@@ -10,6 +10,12 @@ import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import SessionChat from './pages/SessionChat';
+import BodyMapPage from './pages/BodyMapPage';
+import History from './pages/History';
+import SessionDetail from './pages/SessionDetail';
+import HealthStats from './pages/HealthStats';
+import VerifyEmail from './pages/VerifyEmail';
+import VerifyOtp from './pages/VerifyOtp';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -34,9 +40,15 @@ function AppContent() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/onboarding" element={<PrivateRoute><Onboarding /></PrivateRoute>} />
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/session" element={<PrivateRoute><SessionChat /></PrivateRoute>} />
+        <Route path="/body-map" element={<PrivateRoute><BodyMapPage /></PrivateRoute>} />
+        <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
+        <Route path="/history/:id" element={<PrivateRoute><SessionDetail /></PrivateRoute>} />
+        <Route path="/health-stats" element={<PrivateRoute><HealthStats /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <AIAssistant />

@@ -17,6 +17,7 @@ export default function SessionChat() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'quick';
+  const preloadedSymptoms = searchParams.get('symptoms');
 
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -60,7 +61,6 @@ export default function SessionChat() {
           if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
           if (s.emergencyDetected) setEmergency(true);
         } else {
-          // Opening greeting
           const greeting = {
             role: 'assistant',
             content: mode === 'full'
@@ -69,6 +69,13 @@ export default function SessionChat() {
           };
           setMessages([greeting]);
           if (voice.voiceEnabled) voice.speak(greeting.content);
+
+          // Auto-send preloaded symptoms from body map
+          if (preloadedSymptoms && s) {
+            setTimeout(() => {
+              sendMessage(preloadedSymptoms);
+            }, 800);
+          }
         }
       } catch (err) {
         console.error('Session init failed', err);

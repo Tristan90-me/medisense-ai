@@ -151,7 +151,7 @@ USER HEALTH PROFILE:
   const messages = buildMessages(history);
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash-lite",
     contents: messages,
     config: {
       systemInstruction: systemPrompt,
@@ -160,7 +160,7 @@ USER HEALTH PROFILE:
     },
   });
 
-  const rawText = response.text();
+  const rawText = response.text;
   return parseAIResponse(rawText);
 };
 
@@ -184,7 +184,7 @@ Keep it plain, warm, and clear. No markdown. No brackets.
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash-lite",
     contents: [{ role: "user", parts: [{ text: summaryPrompt }] }],
     config: {
       temperature: 0.3,
@@ -192,7 +192,7 @@ Keep it plain, warm, and clear. No markdown. No brackets.
     },
   });
 
-  return response.text();
+  return response.text;
 };
 
 module.exports = { chat, generateSummary, MEDISENSE_SYSTEM_PROMPT };
