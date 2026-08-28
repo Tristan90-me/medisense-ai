@@ -291,7 +291,18 @@ export default function SessionChat() {
       <div className="sc-input-area">
         {voice.isListening && (
           <div className="sc-listening-indicator">
-            <span className="sc-pulse" />
+            <div className="sc-waveform">
+              {[...Array(5)].map((_, i) => (
+                <span
+                  key={i}
+                  className="sc-wave-bar"
+                  style={{
+                    height: `${8 + voice.volume * 20 * (0.5 + Math.random() * 0.5)}px`,
+                    animationDelay: `${i * 0.1}s`,
+                  }}
+                />
+              ))}
+            </div>
             Listening... tap mic to stop
           </div>
         )}

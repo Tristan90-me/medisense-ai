@@ -1,0 +1,41 @@
+{
+  "name": "MediSense AI",
+  "short_name": "MediSense",
+  "description": "Smart symptoms. Smarter care.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "medical", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Quick Check",
+      "short_name": "Quick Check",
+      "description": "Start a quick symptom check",
+      "url": "/session?mode=quick",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Body Map",
+      "short_name": "Body Map",
+      "description": "Open the body map",
+      "url": "/body-map",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

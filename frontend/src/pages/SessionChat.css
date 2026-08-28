@@ -309,16 +309,24 @@
   margin-bottom: 8px;
   font-weight: 500;
 }
-.sc-pulse {
-  width: 8px;
-  height: 8px;
-  background: #ef4444;
-  border-radius: 50%;
-  animation: pulse 1s infinite;
+.sc-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.4); }
+
+.sc-wave-bar {
+  width: 3px;
+  background: #ef4444;
+  border-radius: 2px;
+  transition: height 0.1s ease;
+  animation: wave-idle 1s ease-in-out infinite;
+}
+
+@keyframes wave-idle {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.4); }
 }
 .sc-speaking-indicator {
   margin-bottom: 8px;

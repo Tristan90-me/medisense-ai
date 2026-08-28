@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Activity, Map, Zap, ClipboardList,
-  LogOut, History, TrendingUp,
+  LogOut, History, TrendingUp, Shield,
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -48,6 +48,13 @@ export default function Dashboard() {
       onClick: () => navigate('/health-stats'),
       bg: '#eef2ff',
     },
+    ...(user?.role === 'admin' ? [{
+      icon: <Shield size={18} color="#0f2744" />,
+      title: 'Admin Panel',
+      desc: 'Manage users & monitor sessions',
+      onClick: () => navigate('/admin'),
+      bg: '#f1f5f9',
+    }] : []),
   ];
 
   return (

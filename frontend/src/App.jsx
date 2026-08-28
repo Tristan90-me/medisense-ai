@@ -14,6 +14,11 @@ import BodyMapPage from './pages/BodyMapPage';
 import History from './pages/History';
 import SessionDetail from './pages/SessionDetail';
 import HealthStats from './pages/HealthStats';
+import ErrorBoundary from './components/ErrorBoundary';
+import InstallPrompt from './components/InstallPrompt';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminSessions from './pages/admin/AdminSessions';
 import VerifyEmail from './pages/VerifyEmail';
 import VerifyOtp from './pages/VerifyOtp';
 
@@ -27,6 +32,14 @@ const PrivateRoute = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/login" />;
 };
 
+const AdminRoute = ({ children }) => {
+  const { user, isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (user?.role !== 'admin') return <Navigate to="/dashboard" />;
+  return children;
+};
+
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   if (loading) return null;
@@ -35,7 +48,8 @@ const PublicRoute = ({ children }) => {
 
 function AppContent() {
   return (
-    <>
+    <ErrorBoundary>
+      <>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -49,14 +63,18 @@ function AppContent() {
         <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
         <Route path="/history/:id" element={<PrivateRoute><SessionDetail /></PrivateRoute>} />
         <Route path="/health-stats" element={<PrivateRoute><HealthStats /></PrivateRoute>} />
+        <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
+        <Route path="/admin/sessions" element={<AdminRoute><AdminSessions /></AdminRoute>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <AIAssistant />
       <Toaster position="top-right" />
-    </>
+       <InstallPrompt />
+      </>
+    </ErrorBoundary>
   );
 }
-
 export default function App() {
   return (
     <BrowserRouter>
