@@ -1,15 +1,39 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Activity, AlertTriangle, TrendingUp,
-  ArrowLeft, Shield, Calendar,
+  Users, Activity, AlertTriangle, Calendar,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import api from '../../api/axios';
-import './Admin.css';
+import { motion } from 'framer-motion';
+import adminApi from '../../api/adminApi';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Real palette values from assets/design-tokens.json (primitive.color.*) —
+// recharts sets these directly as SVG attributes, so Tailwind classes won't work here.
+const SEVERITY_COLORS = {
+  Low: '#22C55E',      // primitive.color.green.500
+  Moderate: '#F59E0B', // primitive.color.amber.500
+  High: '#EF4444',     // primitive.color.red.500
+  Critical: '#8B5CF6', // primitive.color.violet.500
+};
+const CHART_GRID = '#F1F5F9';   // primitive.color.slate.100
+const CHART_TICK = '#94A3B8';   // primitive.color.slate.400
+const CHART_TICK_STRONG = '#64748B'; // primitive.color.slate.500
+const CHART_BAR = '#3B82F6';    // primitive.color.blue.500
+
+const statVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06 } },
+};
+const statItem = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } },
+};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -19,10 +43,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await api.get('/admin/stats');
+        const res = await adminApi.get('/admin/stats');
         setStats(res.data);
       } catch {
-        navigate('/dashboard');
+        navigate('/admin/login');
       } finally {
         setLoading(false);
       }
@@ -30,128 +54,123 @@ export default function AdminDashboard() {
     fetch();
   }, []);
 
-  if (loading) return (
-    <div className="admin-loading">
-      <div className="admin-spinner" />
-      <p>Loading admin panel...</p>
-    </div>
-  );
-
-  if (!stats) return null;
-
   const severityMap = {};
-  stats.severityBreakdown?.forEach(s => { severityMap[s._id] = s.count; });
+  stats?.severityBreakdown?.forEach(s => { severityMap[s._id] = s.count; });
 
   const severityData = ['Low', 'Moderate', 'High', 'Critical'].map(level => ({
     name: level,
     count: severityMap[level] || 0,
   }));
 
-  const severityColors = {
-    Low: '#22c55e', Moderate: '#f59e0b',
-    High: '#ef4444', Critical: '#7c3aed',
-  };
-
-  const CustomBar = (props) => {
-    const { x, y, width, height, name } = props;
-    return <rect x={x} y={y} width={width} height={height} fill={severityColors[name]} rx={4} />;
-  };
+  const statCards = stats ? [
+    { label: 'Total Users', value: stats.totalUsers, icon: <Users size={18} />, iconBg: 'bg-primary/10', iconFg: 'text-primary' },
+    { label: 'Total Sessions', value: stats.totalSessions, icon: <Activity size={18} />, iconBg: 'bg-secondary/10', iconFg: 'text-secondary' },
+    { label: "Today's Sessions", value: stats.todaySessions, icon: <Calendar size={18} />, iconBg: 'bg-severity-low-bg', iconFg: 'text-severity-low-fg' },
+    { label: 'Emergencies', value: stats.emergencySessions, icon: <AlertTriangle size={18} />, iconBg: 'bg-severity-high-bg', iconFg: 'text-severity-high-fg' },
+  ] : [];
 
   return (
-    <div className="admin-root">
-      {/* Header */}
-      <div className="admin-header">
-        <button className="admin-back" onClick={() => navigate('/dashboard')}>
-          <ArrowLeft size={18} />
-        </button>
-        <div className="admin-header-center">
-          <div className="admin-header-icon"><Shield size={16} /></div>
-          <div>
-            <p className="admin-title">Admin Panel</p>
-            <p className="admin-sub">System overview</p>
-          </div>
-        </div>
-        <div className="admin-nav-btns">
-          <button className="admin-nav-btn active">Overview</button>
-          <button className="admin-nav-btn" onClick={() => navigate('/admin/users')}>Users</button>
-          <button className="admin-nav-btn" onClick={() => navigate('/admin/sessions')}>Sessions</button>
-        </div>
-      </div>
-
-      <div className="admin-body">
-        {/* Stat cards */}
-        <div className="admin-stats-grid">
-          {[
-            { label: 'Total Users', value: stats.totalUsers, icon: <Users size={18} />, color: '#3b82f6', bg: '#eff6ff' },
-            { label: 'Total Sessions', value: stats.totalSessions, icon: <Activity size={18} />, color: '#8b5cf6', bg: '#f5f3ff' },
-            { label: 'Today\'s Sessions', value: stats.todaySessions, icon: <Calendar size={18} />, color: '#22c55e', bg: '#f0fdf4' },
-            { label: 'Emergencies', value: stats.emergencySessions, icon: <AlertTriangle size={18} />, color: '#ef4444', bg: '#fef2f2' },
-          ].map((s, i) => (
-            <div key={i} className="admin-stat-card">
-              <div className="admin-stat-icon" style={{ background: s.bg, color: s.color }}>
-                {s.icon}
-              </div>
-              <div>
-                <p className="admin-stat-value" style={{ color: s.color }}>{s.value}</p>
-                <p className="admin-stat-label">{s.label}</p>
-              </div>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto flex max-w-[960px] flex-col gap-4 px-4 py-5">
+        {loading ? (
+          <>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-[76px] rounded-[14px]" />
+              ))}
             </div>
-          ))}
-        </div>
+            <Skeleton className="h-[232px] rounded-[14px]" />
+            <Skeleton className="h-[212px] rounded-[14px]" />
+          </>
+        ) : !stats ? null : (
+          <>
+            {/* Stat cards */}
+            <motion.div
+              variants={statVariants}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-2 gap-2.5 sm:grid-cols-4"
+            >
+              {statCards.map((s, i) => (
+                <motion.div key={i} variants={statItem}>
+                  <Card className="gap-0 rounded-[14px] border-border/70 py-0 shadow-none">
+                    <CardContent className="flex items-center gap-3 p-4">
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] ${s.iconBg} ${s.iconFg}`}>
+                        {s.icon}
+                      </div>
+                      <div>
+                        <p className={`text-2xl font-extrabold leading-none ${s.iconFg}`}>{s.value}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{s.label}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </motion.div>
 
-        {/* Sessions by day chart */}
-        {stats.sessionsByDay?.length > 0 && (
-          <div className="admin-card">
-            <p className="admin-card-title">Sessions — Last 7 Days</p>
-            <div style={{ height: 200, marginTop: 16 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.sessionsByDay}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="_id"
-                    tick={{ fontSize: 10, fill: '#94a3b8' }}
-                    tickFormatter={(v) => {
-                      const d = new Date(v);
-                      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                    }}
-                  />
-                  <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                  <Tooltip
-                    formatter={(v) => [v, 'Sessions']}
-                    labelFormatter={(l) => new Date(l).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  />
-                  <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            {/* Sessions by day chart */}
+            {stats.sessionsByDay?.length > 0 && (
+              <Card className="rounded-[14px] border-border/70 shadow-none">
+                <CardContent>
+                  <p className="text-sm font-bold text-foreground">Sessions — Last 7 Days</p>
+                  <div className="mt-4 h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={stats.sessionsByDay}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                        <XAxis
+                          dataKey="_id"
+                          tick={{ fontSize: 10, fill: CHART_TICK }}
+                          tickFormatter={(v) => {
+                            const d = new Date(v);
+                            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                          }}
+                        />
+                        <YAxis tick={{ fontSize: 10, fill: CHART_TICK }} allowDecimals={false} />
+                        <Tooltip
+                          formatter={(v) => [v, 'Sessions']}
+                          labelFormatter={(l) => new Date(l).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        />
+                        <Bar dataKey="count" fill={CHART_BAR} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Severity breakdown */}
+            <Card className="rounded-[14px] border-border/70 shadow-none">
+              <CardContent>
+                <p className="text-sm font-bold text-foreground">Severity Breakdown</p>
+                <div className="mt-4 h-[180px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={severityData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: CHART_TICK_STRONG }} />
+                      <YAxis tick={{ fontSize: 10, fill: CHART_TICK }} allowDecimals={false} />
+                      <Tooltip formatter={(v) => [v, 'Sessions']} />
+                      <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                        {severityData.map((entry) => (
+                          <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick links */}
+            <div className="flex flex-wrap gap-2.5">
+              <Button variant="outline" className="rounded-full" onClick={() => navigate('/admin/users')}>
+                <Users size={16} /> Manage Users
+              </Button>
+              <Button variant="outline" className="rounded-full" onClick={() => navigate('/admin/sessions')}>
+                <Activity size={16} /> Monitor Sessions
+              </Button>
             </div>
-          </div>
+          </>
         )}
-
-        {/* Severity breakdown */}
-        <div className="admin-card">
-          <p className="admin-card-title">Severity Breakdown</p>
-          <div style={{ height: 180, marginTop: 16 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={severityData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} allowDecimals={false} />
-                <Tooltip formatter={(v) => [v, 'Sessions']} />
-                <Bar dataKey="count" shape={<CustomBar />} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Quick links */}
-        <div className="admin-quick-links">
-          <button className="admin-quick-btn" onClick={() => navigate('/admin/users')}>
-            <Users size={16} /> Manage Users
-          </button>
-          <button className="admin-quick-btn" onClick={() => navigate('/admin/sessions')}>
-            <Activity size={16} /> Monitor Sessions
-          </button>
-        </div>
       </div>
     </div>
   );

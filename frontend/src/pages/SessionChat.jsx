@@ -1,19 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useSession } from '../context/SessionContext';
 import useVoice from '../hooks/useVoice';
 import api from '../api/axios';
+import { streamSessionMessage } from '../api/stream';
 import SessionSummary from '../components/SessionSummary';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, ArrowLeft, Activity, Loader,
+  Phone, ArrowLeft, Activity, Loader2,
 } from 'lucide-react';
-import './SessionChat.css';
+
+const SEVERITY_CLASSES = {
+  Low: 'bg-severity-low-bg text-severity-low-fg',
+  Moderate: 'bg-severity-moderate-bg text-severity-moderate-fg',
+  High: 'bg-severity-high-bg text-severity-high-fg',
+  Critical: 'bg-severity-critical-bg text-severity-critical-fg',
+};
 
 export default function SessionChat() {
   const { user } = useAuth();
-  const { activeSession, setActiveSession } = useSession();
+  const { setActiveSession } = useSession();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'quick';
@@ -32,20 +43,18 @@ export default function SessionChat() {
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const streamingIndexRef = useRef(null);
 
   const voice = useVoice();
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Fill input from voice transcript
   useEffect(() => {
     if (voice.transcript) setInput(voice.transcript);
   }, [voice.transcript]);
 
-  // Init session
   useEffect(() => {
     const init = async () => {
       try {
@@ -56,7 +65,6 @@ export default function SessionChat() {
 
         if (res.data.resumed && s.messages?.length) {
           setMessages(s.messages);
-          // Restore state
           if (s.severityScore) setSeverity({ score: s.severityScore, level: s.severityLevel });
           if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
           if (s.emergencyDetected) setEmergency(true);
@@ -70,7 +78,6 @@ export default function SessionChat() {
           setMessages([greeting]);
           if (voice.voiceEnabled) voice.speak(greeting.content);
 
-          // Auto-send preloaded symptoms from body map
           if (preloadedSymptoms && s) {
             setTimeout(() => {
               sendMessage(preloadedSymptoms);
@@ -98,37 +105,49 @@ export default function SessionChat() {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
-    try {
-      const res = await api.post('/ai/session/message', {
-        sessionId: session._id,
-        message: content,
-      });
+    let firstChunk = true;
 
-      const aiMsg = { role: 'assistant', content: res.data.message };
-      setMessages((prev) => [...prev, aiMsg]);
-
-      if (res.data.emergency) setEmergency(true);
-      if (res.data.severity) setSeverity(res.data.severity);
-      if (res.data.diagnosis) setDiagnosis(res.data.diagnosis);
-      if (res.data.suggestions?.length) setSuggestions(res.data.suggestions);
-
-      // Update session ref
-      if (res.data.sessionStatus === 'completed') {
-        setSession((s) => ({ ...s, status: 'completed' }));
-      }
-
-      // Speak AI response
-      if (voice.voiceEnabled) voice.speak(res.data.message);
-
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' },
-      ]);
-    } finally {
-      setLoading(false);
-      inputRef.current?.focus();
-    }
+    await streamSessionMessage({
+      sessionId: session._id,
+      message: content,
+      onChunk: (delta) => {
+        if (firstChunk) {
+          firstChunk = false;
+          setLoading(false);
+          setMessages((prev) => {
+            streamingIndexRef.current = prev.length;
+            return [...prev, { role: 'assistant', content: delta }];
+          });
+        } else {
+          setMessages((prev) => {
+            const next = [...prev];
+            const i = streamingIndexRef.current;
+            if (next[i]) next[i] = { ...next[i], content: next[i].content + delta };
+            return next;
+          });
+        }
+      },
+      onDone: (event) => {
+        setLoading(false);
+        if (event.emergency) setEmergency(true);
+        if (event.severity) setSeverity(event.severity);
+        if (event.diagnosis) setDiagnosis(event.diagnosis);
+        if (event.suggestions?.length) setSuggestions(event.suggestions);
+        if (event.sessionStatus === 'completed') {
+          setSession((s) => ({ ...s, status: 'completed' }));
+        }
+        if (voice.voiceEnabled) voice.speak(event.message);
+        inputRef.current?.focus();
+      },
+      onError: () => {
+        setLoading(false);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' },
+        ]);
+        inputRef.current?.focus();
+      },
+    });
   };
 
   const handleSuggestion = (s) => sendMessage(s);
@@ -138,141 +157,166 @@ export default function SessionChat() {
     else voice.startListening();
   };
 
-  const severityColor = {
-    Low: '#22c55e',
-    Moderate: '#f59e0b',
-    High: '#ef4444',
-    Critical: '#7c3aed',
-  };
-
   if (initializing) {
     return (
-      <div className="sc-loading">
-        <Loader size={28} className="sc-spinner" />
-        <p>Starting your session...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 size={28} className="animate-spin text-primary" />
+        <p className="text-sm">Starting your session...</p>
       </div>
     );
   }
 
   return (
-    <div className="sc-root">
+    <div className="flex min-h-screen flex-col bg-background">
       {/* Emergency Banner */}
-      {emergency && (
-        <div className="sc-emergency-banner">
-          <AlertTriangle size={18} />
-          <span>⚠️ Emergency symptoms detected. Please seek immediate medical attention.</span>
-          <a href="tel:112" className="sc-call-btn">
-            <Phone size={14} /> Call 112
-          </a>
-          <button className="sc-dismiss" onClick={() => setEmergency(false)}>✕</button>
-        </div>
-      )}
+      <AnimatePresence>
+        {emergency && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="flex items-center gap-3 overflow-hidden bg-destructive px-4 py-2.5 text-sm text-destructive-foreground"
+          >
+            <AlertTriangle size={18} className="shrink-0 animate-pulse" />
+            <span className="flex-1">⚠️ Emergency symptoms detected. Please seek immediate medical attention.</span>
+            <a href="tel:112" className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
+              <Phone size={14} /> Call 112
+            </a>
+            <button onClick={() => setEmergency(false)} className="shrink-0 text-lg leading-none">✕</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
-      <div className="sc-header">
-        <button className="sc-back" onClick={() => navigate('/dashboard')}>
+      <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
           <ArrowLeft size={18} />
-        </button>
-        <div className="sc-header-center">
-          <div className="sc-header-icon"><Activity size={16} /></div>
+        </Button>
+        <div className="flex flex-1 items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Activity size={16} />
+          </div>
           <div>
-            <p className="sc-header-title">MediSense AI</p>
-            <p className="sc-header-sub">
+            <p className="text-sm font-semibold text-foreground">MediSense AI</p>
+            <p className="text-xs text-muted-foreground">
               {mode === 'full' ? 'Full Assessment' : 'Quick Check'}
               {session?.status === 'completed' && ' · Completed'}
             </p>
           </div>
         </div>
-        <div className="sc-header-right">
+        <div className="flex items-center gap-2">
           {severity && (
-            <span
-              className="sc-severity-badge"
-              style={{ background: severityColor[severity.level] + '20', color: severityColor[severity.level] }}
-            >
+            <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', SEVERITY_CLASSES[severity.level])}>
               {severity.level}
             </span>
           )}
-          <button
-            className="sc-voice-toggle"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={voice.toggleVoice}
             title={voice.voiceEnabled ? 'Mute AI voice' : 'Enable AI voice'}
           >
             {voice.voiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="sc-messages">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((msg, i) => (
-          <div key={i} className={`sc-msg ${msg.role === 'user' ? 'sc-msg-user' : 'sc-msg-ai'}`}>
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className={cn('flex items-end gap-2', msg.role === 'user' ? 'flex-row-reverse' : '')}
+          >
             {msg.role === 'assistant' && (
-              <div className="sc-avatar"><Activity size={12} /></div>
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Activity size={12} />
+              </div>
             )}
-            <div className="sc-bubble">{msg.content}</div>
-            {msg.role === 'assistant' && voice.voiceEnabled && (
-              <button
-                className="sc-replay"
-                onClick={() => voice.speak(msg.content)}
-                title="Replay"
-              >
-                <Volume2 size={12} />
-              </button>
-            )}
-          </div>
+            <div
+              className={cn(
+                'group relative max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
+                msg.role === 'user'
+                  ? 'rounded-br-sm bg-primary text-primary-foreground'
+                  : 'rounded-bl-sm border border-border bg-card text-foreground'
+              )}
+            >
+              {msg.content}
+              {msg.role === 'assistant' && voice.voiceEnabled && msg.content && (
+                <button
+                  onClick={() => voice.speak(msg.content)}
+                  title="Replay"
+                  className="ml-2 inline-flex align-middle text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <Volume2 size={12} />
+                </button>
+              )}
+            </div>
+          </motion.div>
         ))}
 
         {loading && (
-          <div className="sc-msg sc-msg-ai">
-            <div className="sc-avatar"><Activity size={12} /></div>
-            <div className="sc-bubble sc-typing">
-              <span /><span /><span />
+          <div className="flex items-end gap-2">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Activity size={12} />
             </div>
+            <Skeleton className="h-9 w-40 rounded-2xl rounded-bl-sm" />
           </div>
         )}
 
-        {/* Suggestion chips */}
         {!loading && suggestions.length > 0 && (
-          <div className="sc-suggestions">
+          <div className="flex flex-wrap gap-2 pt-1">
             {suggestions.map((s, i) => (
-              <button key={i} className="sc-chip" onClick={() => handleSuggestion(s)}>
+              <button
+                key={i}
+                onClick={() => handleSuggestion(s)}
+                className="rounded-full border border-primary/30 bg-primary/5 px-3.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
                 {s}
               </button>
             ))}
           </div>
         )}
 
-        {/* Diagnosis card */}
         {diagnosis && (
-          <div className="sc-diagnosis-card">
-            <p className="sc-diagnosis-title">Assessment Results</p>
-            <p className="sc-urgency" data-urgency={diagnosis.seekCareUrgency}>
-              Care needed: <strong>{diagnosis.seekCareUrgency?.replace('-', ' ')}</strong>
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-border bg-card p-4"
+          >
+            <p className="mb-2 text-sm font-bold text-foreground">Assessment Results</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Care needed: <strong className="capitalize text-foreground">{diagnosis.seekCareUrgency?.replace('-', ' ')}</strong>
             </p>
-            <div className="sc-conditions">
+            <div className="space-y-3">
               {diagnosis.conditions?.slice(0, 3).map((c, i) => (
-                <div key={i} className="sc-condition">
-                  <div className="sc-condition-header">
+                <div key={i}>
+                  <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
                     <span>{c.name}</span>
                     <span>{c.probability}%</span>
                   </div>
-                  <div className="sc-condition-bar">
-                    <div
-                      className="sc-condition-fill"
-                      style={{ width: `${c.probability}%` }}
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${c.probability}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                      className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
                     />
                   </div>
                 </div>
               ))}
             </div>
             {diagnosis.recommendations?.length > 0 && (
-              <ul className="sc-recommendations">
+              <ul className="mt-3 space-y-1">
                 {diagnosis.recommendations.map((r, i) => (
-                  <li key={i}>- {r}</li>
+                  <li key={i} className="text-xs text-muted-foreground">- {r}</li>
                 ))}
               </ul>
             )}
-          </div>
+          </motion.div>
         )}
 
         <div ref={messagesEndRef} />
@@ -280,26 +324,24 @@ export default function SessionChat() {
 
       {/* Summary button */}
       {messages.length >= 4 && (
-        <div className="sc-summary-bar">
-          <button className="sc-summary-btn" onClick={() => setShowSummary(true)}>
+        <div className="border-t border-border px-4 py-2">
+          <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => setShowSummary(true)}>
             View Session Summary
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Input */}
-      <div className="sc-input-area">
+      <div className="border-t border-border bg-card p-3">
         {voice.isListening && (
-          <div className="sc-listening-indicator">
-            <div className="sc-waveform">
+          <div className="mb-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-end gap-0.5">
               {[...Array(5)].map((_, i) => (
-                <span
+                <motion.span
                   key={i}
-                  className="sc-wave-bar"
-                  style={{
-                    height: `${8 + voice.volume * 20 * (0.5 + Math.random() * 0.5)}px`,
-                    animationDelay: `${i * 0.1}s`,
-                  }}
+                  className="w-1 rounded-full bg-primary"
+                  animate={{ height: [4, 14, 4] }}
+                  transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.1 }}
                 />
               ))}
             </div>
@@ -307,46 +349,42 @@ export default function SessionChat() {
           </div>
         )}
         {voice.isSpeaking && (
-          <div className="sc-speaking-indicator">
-            <button onClick={voice.stopSpeaking}>
+          <div className="mb-2 flex justify-center">
+            <button onClick={voice.stopSpeaking} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
               <VolumeX size={13} /> Stop speaking
             </button>
           </div>
         )}
-        <div className="sc-input-row">
+        <div className="flex items-center gap-2">
           {voice.supported && (
-            <button
-              className={`sc-mic-btn ${voice.isListening ? 'active' : ''}`}
+            <Button
+              variant={voice.isListening ? 'destructive' : 'outline'}
+              size="icon"
               onClick={handleMic}
               disabled={voice.isSpeaking}
               title={voice.isListening ? 'Stop recording' : 'Start voice input'}
             >
               {voice.isListening ? <MicOff size={18} /> : <Mic size={18} />}
-            </button>
+            </Button>
           )}
           <input
             ref={inputRef}
-            className="sc-input"
+            className="h-10 flex-1 rounded-full border border-input bg-background px-4 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
             placeholder={voice.isListening ? 'Speak now...' : 'Describe your symptoms...'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
             disabled={loading}
           />
-          <button
-            className="sc-send-btn"
-            onClick={() => sendMessage()}
-            disabled={!input.trim() || loading}
-          >
+          <Button size="icon" onClick={() => sendMessage()} disabled={!input.trim() || loading} className="rounded-full">
             <Send size={16} />
-          </button>
+          </Button>
         </div>
-        <p className="sc-disclaimer">
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
           MediSense AI is not a substitute for professional medical advice.
         </p>
       </div>
 
-      {/* Summary modal */}
       {showSummary && session && (
         <SessionSummary
           session={session}

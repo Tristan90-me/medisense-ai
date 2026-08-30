@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import { Activity } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -18,34 +19,23 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          minHeight: '100vh', padding: '2rem',
-          background: '#f8fafc', textAlign: 'center',
-          fontFamily: 'Inter, sans-serif',
-        }}>
-          <div style={{ width: 56, height: 56, background: '#eff6ff', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-            <Activity size={28} color="#3b82f6" />
+        <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-8 text-center font-sans">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+            <Activity size={28} className="text-primary" />
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1e3a5f', marginBottom: 8 }}>
-            Something went wrong
-          </h1>
-          <p style={{ fontSize: 14, color: '#64748b', marginBottom: 24, maxWidth: 320, lineHeight: 1.6 }}>
-            MediSense AI ran into an unexpected error. Your data is safe.
-          </p>
-          <button
-            onClick={() => window.location.href = '/dashboard'}
-            style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 20, padding: '10px 24px', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}
-          >
+          <div>
+            <h1 className="mb-2 font-heading text-xl font-bold text-foreground">Something went wrong</h1>
+            <p className="mx-auto max-w-xs text-sm leading-relaxed text-muted-foreground">
+              MediSense AI ran into an unexpected error. Your data is safe.
+            </p>
+          </div>
+          <Button onClick={() => (window.location.href = '/dashboard')} className="rounded-full px-6">
             Back to Dashboard
-          </button>
-          {process.env.NODE_ENV === 'development' && (
-            <details style={{ marginTop: 24, fontSize: 11, color: '#94a3b8', maxWidth: 500, textAlign: 'left' }}>
-              <summary style={{ cursor: 'pointer' }}>Error details</summary>
-              <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {this.state.error?.toString()}
-              </pre>
+          </Button>
+          {import.meta.env.DEV && (
+            <details className="mt-4 max-w-lg text-left text-xs text-muted-foreground">
+              <summary className="cursor-pointer">Error details</summary>
+              <pre className="mt-2 whitespace-pre-wrap break-all">{this.state.error?.toString()}</pre>
             </details>
           )}
         </div>

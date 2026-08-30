@@ -1,9 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, Shield } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+
+const REMEMBER_OPTIONS = [
+  { label: 'Ask every time', val: null },
+  { label: '7 days', val: 7 },
+  { label: '14 days', val: 14 },
+];
 
 export default function VerifyOtp() {
   const { pendingEmail, setAuth, setDeviceToken } = useAuth();
@@ -70,98 +80,105 @@ export default function VerifyOtp() {
   const handleResend = async () => {
     if (resendTimer > 0) return;
     try {
-      await api.post('/auth/login', { email: pendingEmail, password: '__resend__' });
-    } catch {}
-    toast.success('A new code has been sent to your email.');
-    setResendTimer(60);
+      await api.post('/auth/resend-otp', { email: pendingEmail });
+      toast.success('A new code has been sent to your email.');
+      setResendTimer(60);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not resend code');
+    }
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-icon"><Activity size={20} /></div>
-          <span className="auth-logo-name">MediSense AI</span>
-        </div>
-
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ width: 52, height: 52, background: '#eff6ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
-            <Shield size={26} color="#3b82f6" />
-          </div>
-          <h1 className="auth-title">Check your email</h1>
-          <p className="auth-subtitle">
-            We sent a 6-digit code to <strong>{pendingEmail}</strong>.<br />It expires in 10 minutes.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          {/* OTP digit inputs */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: '1.5rem' }} onPaste={handlePaste}>
-            {digits.map((d, i) => (
-              <input
-                key={i}
-                ref={el => inputRefs.current[i] = el}
-                type="text" inputMode="numeric" maxLength={1}
-                value={d}
-                onChange={e => handleDigit(i, e.target.value)}
-                onKeyDown={e => handleKeyDown(i, e)}
-                style={{
-                  width: 46, height: 54, textAlign: 'center',
-                  fontSize: 22, fontWeight: 700,
-                  border: `1.5px solid ${d ? '#3b82f6' : '#e2e8f0'}`,
-                  borderRadius: 10, background: d ? '#eff6ff' : '#f8fafc',
-                  color: '#0f2744', outline: 'none', transition: 'all 0.15s',
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Remember me toggle */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '1rem', marginBottom: '1.25rem' }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#0f2744', marginBottom: '0.6rem' }}>Keep me logged in</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[
-                { label: 'Ask every time', val: null },
-                { label: '7 days', val: 7 },
-                { label: '14 days', val: 14 },
-              ].map(opt => (
-                <button key={String(opt.val)} type="button"
-                  onClick={() => setRememberDays(opt.val)}
-                  style={{
-                    flex: 1, padding: '7px 4px', fontSize: 12, fontWeight: 500,
-                    border: `1.5px solid ${rememberDays === opt.val ? '#3b82f6' : '#e2e8f0'}`,
-                    borderRadius: 8, cursor: 'pointer',
-                    background: rememberDays === opt.val ? '#eff6ff' : '#fff',
-                    color: rememberDays === opt.val ? '#3b82f6' : '#64748b',
-                    transition: 'all 0.15s',
-                  }}>
-                  {opt.label}
-                </button>
-              ))}
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-severity-low-bg px-4 py-8">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-[420px]"
+      >
+        <Card className="rounded-2xl border-border/70 shadow-lg">
+          <CardContent className="p-8">
+            <div className="mb-6 flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+                <Activity size={20} />
+              </div>
+              <span className="font-heading text-lg font-bold text-foreground">MediSense AI</span>
             </div>
-            <p style={{ fontSize: 11, color: '#94a3b8', marginTop: '0.5rem' }}>
-              {rememberDays
-                ? `This device will be trusted for ${rememberDays} days.`
-                : 'You will be asked for a code every time you log in.'}
+
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-primary/10">
+                <Shield size={26} className="text-primary" />
+              </div>
+              <h1 className="mb-1 font-heading text-xl font-bold text-foreground">Check your email</h1>
+              <p className="text-sm text-muted-foreground">
+                We sent a 6-digit code to <strong className="text-foreground">{pendingEmail}</strong>.<br />It expires in 10 minutes.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="mb-6 flex justify-center gap-2" onPaste={handlePaste}>
+                {digits.map((d, i) => (
+                  <input
+                    key={i}
+                    ref={el => inputRefs.current[i] = el}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={d}
+                    onChange={e => handleDigit(i, e.target.value)}
+                    onKeyDown={e => handleKeyDown(i, e)}
+                    className={cn(
+                      'h-[54px] w-[46px] rounded-[10px] border text-center text-xl font-bold outline-none transition-all',
+                      d ? 'border-primary bg-primary/10 text-foreground' : 'border-input bg-muted/40 text-foreground'
+                    )}
+                  />
+                ))}
+              </div>
+
+              <div className="mb-5 rounded-xl border border-border bg-muted/30 p-4">
+                <p className="mb-2.5 text-[13px] font-semibold text-foreground">Keep me logged in</p>
+                <div className="flex gap-2">
+                  {REMEMBER_OPTIONS.map(opt => (
+                    <button
+                      key={String(opt.val)}
+                      type="button"
+                      onClick={() => setRememberDays(opt.val)}
+                      className={cn(
+                        'flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-all',
+                        rememberDays === opt.val
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-input bg-card text-muted-foreground'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {rememberDays
+                    ? `This device will be trusted for ${rememberDays} days.`
+                    : 'You will be asked for a code every time you log in.'}
+                </p>
+              </div>
+
+              <Button type="submit" disabled={loading || digits.join('').length < 6} className="w-full rounded-full">
+                {loading ? 'Verifying...' : 'Confirm login'}
+              </Button>
+            </form>
+
+            <p className="mt-4 text-center text-[13px] text-muted-foreground">
+              Didn't receive it?{' '}
+              {resendTimer > 0
+                ? <span>Resend in {resendTimer}s</span>
+                : <button className="font-semibold text-primary hover:underline" onClick={handleResend}>Resend code</button>
+              }
             </p>
-          </div>
-
-          <button className="btn-blue" type="submit" disabled={loading || digits.join('').length < 6}>
-            {loading ? 'Verifying...' : 'Confirm login'}
-          </button>
-        </form>
-
-        <p style={{ textAlign: 'center', fontSize: 13, color: '#94a3b8', marginTop: '1rem' }}>
-          Didn't receive it?{' '}
-          {resendTimer > 0
-            ? <span>Resend in {resendTimer}s</span>
-            : <span style={{ color: '#3b82f6', cursor: 'pointer', fontWeight: 600 }} onClick={handleResend}>Resend code</span>
-          }
-        </p>
-        <p style={{ textAlign: 'center', fontSize: 13, color: '#94a3b8', marginTop: '0.5rem' }}>
-          <span style={{ color: '#3b82f6', cursor: 'pointer' }} onClick={() => navigate('/login')}>← Back to login</span>
-        </p>
-      </div>
+            <p className="mt-2 text-center text-[13px] text-muted-foreground">
+              <button className="text-primary hover:underline" onClick={() => navigate('/login')}>← Back to login</button>
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

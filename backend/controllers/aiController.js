@@ -1,6 +1,6 @@
 const Session = require("../models/Session");
 const HealthProfile = require("../models/HealthProfile");
-const { chat, generateSummary } = require("../utils/gemini");
+const { chat, chatStream, generateSummary } = require("../utils/gemini");
 
 // ─── Start or Resume Session ───────────────────────────────────────────────
 const startSession = async (req, res) => {
@@ -107,6 +107,93 @@ const sendMessage = async (req, res) => {
   }
 };
 
+// ─── Send Message (streaming, SSE) ─────────────────────────────────────────
+// Mirrors sendMessage's logic exactly, but streams the assistant's raw text
+// as it arrives and only runs parseAIResponse()/session updates once the
+// stream completes (bracket-tagged metadata can split across chunk
+// boundaries, so it can't be parsed incrementally).
+const sendMessageStream = async (req, res) => {
+  const { sessionId, message } = req.body;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+  try {
+    const session = await Session.findOne({
+      _id: sessionId,
+      user: req.user.id,
+    });
+
+    if (!session) {
+      send({ type: "error", message: "Session not found" });
+      return res.end();
+    }
+
+    session.messages.push({ role: "user", content: message });
+
+    const healthProfile = await HealthProfile.findOne({ user: req.user.id });
+
+    const history = session.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const parsed = await chatStream(history, healthProfile, (delta) => {
+      send({ type: "chunk", text: delta });
+    });
+
+    session.messages.push({ role: "assistant", content: parsed.text });
+
+    if (parsed.emergency) session.emergencyDetected = true;
+
+    if (parsed.severity) {
+      session.severityScore = parsed.severity.score;
+      session.severityLevel = parsed.severity.level;
+    }
+
+    if (parsed.symptoms?.symptoms) {
+      const newSymptoms = parsed.symptoms.symptoms.map((s) => ({
+        name: s,
+        duration: parsed.symptoms.duration || "",
+        onset: parsed.symptoms.onset || "",
+      }));
+      const existing = session.symptoms.map((s) => s.name.toLowerCase());
+      newSymptoms.forEach((s) => {
+        if (!existing.includes(s.name.toLowerCase())) {
+          session.symptoms.push(s);
+        }
+      });
+    }
+
+    if (parsed.diagnosis) {
+      session.diagnosis = parsed.diagnosis;
+      session.status = "completed";
+    }
+
+    await session.save();
+
+    send({
+      type: "done",
+      message: parsed.text,
+      emergency: parsed.emergency,
+      severity: parsed.severity,
+      symptoms: parsed.symptoms,
+      diagnosis: parsed.diagnosis,
+      suggestions: parsed.suggestions,
+      sessionStatus: session.status,
+    });
+    res.end();
+  } catch (err) {
+    console.error("sendMessageStream error:", err);
+    send({ type: "error", message: "Failed to send message" });
+    res.end();
+  }
+};
+
 // ─── Generate Summary ──────────────────────────────────────────────────────
 const getSummary = async (req, res) => {
   try {
@@ -193,6 +280,7 @@ const assistantChat = async (req, res) => {
 module.exports = {
   startSession,
   sendMessage,
+  sendMessageStream,
   getSummary,
   getSessions,
   getSession,

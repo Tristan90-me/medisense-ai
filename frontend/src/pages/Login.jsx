@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import AuthShell from '../components/auth/AuthShell';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+const SIDE_POINTS = [
+  'A ranked differential, not just one guess',
+  'Personalized to your age, history, and conditions',
+  'Emergency symptoms flagged immediately',
+];
 
 export default function Login() {
   const { setAuth, setDeviceToken, setPendingEmail, deviceToken } = useAuth();
@@ -44,31 +53,47 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-icon"><Activity size={20} /></div>
-          <span className="auth-logo-name">MediSense AI</span>
+    <AuthShell
+      sideTitle="Understand your symptoms in minutes."
+      sideSubtitle="Sign back in to pick up where you left off — your health profile, session history, and personalized assessments are all waiting."
+      sidePoints={SIDE_POINTS}
+    >
+      <h1 className="mb-3 font-heading text-[28px] font-bold text-foreground">Welcome back</h1>
+      <p className="mb-9 text-sm text-muted-foreground">Sign in to your health dashboard</p>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            className="h-11"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            required
+          />
         </div>
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Sign in to your health dashboard</p>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <input className="form-input" type="email" placeholder="you@example.com"
-              value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input className="form-input" type="password" placeholder="••••••••"
-              value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-          </div>
-          <button className="btn-blue" type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-        <p className="auth-switch">No account? <Link to="/register">Create one</Link></p>
-      </div>
-    </div>
+        <div className="space-y-2.5">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            className="h-11"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            required
+          />
+        </div>
+        <Button type="submit" disabled={loading} className="h-11 w-full rounded-full">
+          {loading ? 'Signing in...' : 'Sign in'}
+        </Button>
+      </form>
+
+      <p className="mt-8 text-center text-sm text-muted-foreground">
+        No account? <Link to="/register" className="font-semibold text-primary hover:underline">Create one</Link>
+      </p>
+    </AuthShell>
   );
 }

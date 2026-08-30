@@ -2,19 +2,23 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Activity, ChevronRight,
-  Clock, CheckCircle, AlertCircle, Loader,
+  Clock, CheckCircle, AlertCircle,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
-import './History.css';
+import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const severityColor = {
-  Low: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
-  Moderate: { bg: '#fffbeb', text: '#d97706', dot: '#f59e0b' },
-  High: { bg: '#fef2f2', text: '#dc2626', dot: '#ef4444' },
-  Critical: { bg: '#f5f3ff', text: '#7c3aed', dot: '#8b5cf6' },
+const SEVERITY_CLASSES = {
+  Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg', dot: 'bg-severity-low' },
+  Moderate: { bg: 'bg-severity-moderate-bg', fg: 'text-severity-moderate-fg', dot: 'bg-severity-moderate' },
+  High: { bg: 'bg-severity-high-bg', fg: 'text-severity-high-fg', dot: 'bg-severity-high' },
+  Critical: { bg: 'bg-severity-critical-bg', fg: 'text-severity-critical-fg', dot: 'bg-severity-critical' },
 };
 
 const modeLabel = { quick: 'Quick Check', full: 'Full Assessment' };
+
+const FILTERS = ['all', 'active', 'completed'];
 
 export default function History() {
   const navigate = useNavigate();
@@ -51,28 +55,40 @@ export default function History() {
   };
 
   return (
-    <div className="hist-root">
+    <div className="flex min-h-screen flex-col bg-background">
       {/* Header */}
-      <div className="hist-header">
-        <button className="hist-back" onClick={() => navigate('/dashboard')}>
+      <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="flex rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"
+        >
           <ArrowLeft size={18} />
         </button>
-        <div className="hist-header-center">
-          <div className="hist-header-icon"><Activity size={16} /></div>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Activity size={16} />
+          </div>
           <div>
-            <p className="hist-title">Session History</p>
-            <p className="hist-sub">{sessions.length} session{sessions.length !== 1 ? 's' : ''} total</p>
+            <p className="font-heading text-sm font-semibold text-foreground">Session History</p>
+            <p className="text-[11px] text-muted-foreground">
+              {sessions.length} session{sessions.length !== 1 ? 's' : ''} total
+            </p>
           </div>
         </div>
       </div>
 
       {/* Filter tabs */}
-      <div className="hist-filters">
-        {['all', 'active', 'completed'].map((f) => (
+      <div className="flex gap-2 border-b border-border bg-card px-4 py-3">
+        {FILTERS.map((f) => (
           <button
             key={f}
-            className={`hist-filter-btn ${filter === f ? 'active' : ''}`}
             onClick={() => setFilter(f)}
+            className={cn(
+              'relative rounded-full border px-4 py-1.5 text-xs font-medium transition-colors',
+              filter === f
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-background text-muted-foreground hover:bg-accent'
+            )}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
@@ -80,77 +96,100 @@ export default function History() {
       </div>
 
       {/* List */}
-      <div className="hist-list">
+      <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-2 px-4 py-3">
         {loading && (
-          <div className="hist-loading">
-            <Loader size={24} className="hist-spinner" />
-            <p>Loading sessions...</p>
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
+                <Skeleton className="h-[38px] w-[38px] shrink-0 rounded-[10px]" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3.5 w-28" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
         {!loading && filtered.length === 0 && (
-          <div className="hist-empty">
-            <p className="hist-empty-icon">🩺</p>
-            <p className="hist-empty-title">No sessions yet</p>
-            <p className="hist-empty-sub">Start a Quick Check or Full Assessment to see your history here.</p>
-            <button className="hist-start-btn" onClick={() => navigate('/session?mode=quick')}>
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+            <p className="text-4xl">🩺</p>
+            <p className="text-base font-semibold text-foreground">No sessions yet</p>
+            <p className="max-w-[280px] text-sm leading-relaxed text-muted-foreground">
+              Start a Quick Check or Full Assessment to see your history here.
+            </p>
+            <button
+              onClick={() => navigate('/session?mode=quick')}
+              className="mt-2 rounded-full bg-primary px-[22px] py-2.5 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
               Start your first check
             </button>
           </div>
         )}
 
-        {!loading && filtered.map((s) => {
-          const sev = severityColor[s.severityLevel];
-          return (
-            <button
-              key={s._id}
-              className="hist-item"
-              onClick={() => navigate(`/history/${s._id}`)}
-            >
-              {/* Left */}
-              <div className="hist-item-left">
-                <div
-                  className="hist-item-icon"
-                  style={{ background: sev?.bg || '#f1f5f9' }}
-                >
-                  {s.status === 'completed'
-                    ? <CheckCircle size={16} color={sev?.text || '#64748b'} />
-                    : <Clock size={16} color="#64748b" />
-                  }
-                </div>
-                <div>
-                  <p className="hist-item-mode">{modeLabel[s.mode] || s.mode}</p>
-                  <p className="hist-item-date">
-                    {formatDate(s.createdAt)} · {formatTime(s.createdAt)}
-                  </p>
-                  {s.symptoms?.length > 0 && (
-                    <p className="hist-item-symptoms">
-                      {s.symptoms.slice(0, 3).map(sym => sym.name).join(', ')}
-                      {s.symptoms.length > 3 ? ` +${s.symptoms.length - 3} more` : ''}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Right */}
-              <div className="hist-item-right">
-                {s.severityLevel && (
-                  <span
-                    className="hist-sev-badge"
-                    style={{ background: sev?.bg, color: sev?.text }}
+        <AnimatePresence mode="popLayout">
+          {!loading && filtered.map((s, i) => {
+            const sev = SEVERITY_CLASSES[s.severityLevel];
+            return (
+              <motion.button
+                key={s._id}
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97 }}
+                transition={{ duration: 0.25, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
+                onClick={() => navigate(`/history/${s._id}`)}
+                className="flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-shadow hover:shadow-md"
+              >
+                {/* Left */}
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      'flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]',
+                      sev ? sev.bg : 'bg-muted'
+                    )}
                   >
-                    <span className="hist-sev-dot" style={{ background: sev?.dot }} />
-                    {s.severityLevel}
-                  </span>
-                )}
-                {s.emergencyDetected && (
-                  <AlertCircle size={16} color="#ef4444" />
-                )}
-                <ChevronRight size={16} color="#cbd5e1" />
-              </div>
-            </button>
-          );
-        })}
+                    {s.status === 'completed' ? (
+                      <CheckCircle size={16} className={sev ? sev.fg : 'text-muted-foreground'} />
+                    ) : (
+                      <Clock size={16} className="text-muted-foreground" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-foreground">{modeLabel[s.mode] || s.mode}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {formatDate(s.createdAt)} · {formatTime(s.createdAt)}
+                    </p>
+                    {s.symptoms?.length > 0 && (
+                      <p className="mt-1 max-w-[220px] truncate text-[11px] text-muted-foreground">
+                        {s.symptoms.slice(0, 3).map((sym) => sym.name).join(', ')}
+                        {s.symptoms.length > 3 ? ` +${s.symptoms.length - 3} more` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right */}
+                <div className="flex shrink-0 items-center gap-2">
+                  {s.severityLevel && (
+                    <span
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11px] font-semibold',
+                        sev.bg,
+                        sev.fg
+                      )}
+                    >
+                      <span className={cn('h-1.5 w-1.5 rounded-full', sev.dot)} />
+                      {s.severityLevel}
+                    </span>
+                  )}
+                  {s.emergencyDetected && <AlertCircle size={16} className="text-destructive" />}
+                  <ChevronRight size={16} className="text-muted-foreground/50" />
+                </div>
+              </motion.button>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </div>
   );

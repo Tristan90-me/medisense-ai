@@ -1,96 +1,171 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
 
+/*
+  Design tokens sourced from assets/design-tokens.json (primitive → semantic → component).
+  Do not hand-edit color values here without updating that file first — it's the source of truth.
+  Legacy CSS variables/classes below (--navy, --blue, .auth-wrapper, .btn-blue, etc.) stay in
+  place until each page is migrated off them per the Phase 1 rollout order; do not delete early.
+*/
 :root {
-  --navy: #0f2744;
-  --blue: #3b82f6;
-  --blue-dark: #2563eb;
-  --blue-light: #eff6ff;
-  --blue-mid: #dbeafe;
-  --mint: #d1fae5;
-  --mint-text: #065f46;
-  --text-body: #475569;
-  --text-muted: #94a3b8;
-  --border: #e2e8f0;
-  --white: #ffffff;
-  --bg: #f8faff;
+  --background: hsl(210 40% 98%);
+  --foreground: hsl(213 64% 16%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(213 64% 16%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(213 64% 16%);
+  --primary: hsl(217 91% 60%);
+  --primary-hover: hsl(221 83% 53%);
+  --primary-active: hsl(224 76% 48%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(258 90% 66%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(210 40% 96%);
+  --muted-foreground: hsl(215 16% 47%);
+  --accent: hsl(160 84% 39%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 72% 51%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(214 32% 91%);
+  --input: hsl(214 32% 91%);
+  --ring: hsl(217 91% 60%);
+  --radius: 0.625rem;
+
+  /* Clinical severity scale — distinct from generic semantic colors, see docs/brand-guidelines.md */
+  --severity-low: hsl(142 71% 45%);
+  --severity-low-bg: hsl(138 76% 97%);
+  --severity-low-fg: hsl(142 76% 36%);
+  --severity-moderate: hsl(38 92% 50%);
+  --severity-moderate-bg: hsl(48 100% 96%);
+  --severity-moderate-fg: hsl(32 95% 44%);
+  --severity-high: hsl(0 84% 60%);
+  --severity-high-bg: hsl(0 86% 97%);
+  --severity-high-fg: hsl(0 72% 51%);
+  --severity-critical: hsl(258 90% 66%);
+  --severity-critical-bg: hsl(250 100% 98%);
+  --severity-critical-fg: hsl(262 83% 58%);
+
+  /*
+    Fixed, theme-INDEPENDENT tokens — intentionally not redefined under .dark.
+    Use these only for decorative bands meant to stay dark navy regardless of
+    site theme (e.g. Landing's stats/CTA/footer bands). Using --foreground/
+    --background for that purpose was the root cause of a real bug: those
+    tokens flip in dark mode, so a "fixed dark band" would invert to light.
+  */
+  --ink: hsl(213 64% 16%);
+  --ink-foreground: hsl(0 0% 100%);
 }
 
-body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--navy);
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
+.dark {
+  --background: hsl(222 47% 11%);
+  --foreground: hsl(210 40% 98%);
+  --card: hsl(217 33% 17%);
+  --card-foreground: hsl(210 40% 98%);
+  --popover: hsl(217 33% 17%);
+  --popover-foreground: hsl(210 40% 98%);
+  --primary: hsl(213 94% 68%);
+  --primary-hover: hsl(212 96% 78%);
+  --primary-active: hsl(214 95% 93%);
+  --primary-foreground: hsl(222 47% 11%);
+  --secondary: hsl(258 90% 76%);
+  --secondary-foreground: hsl(222 47% 11%);
+  --muted: hsl(217 33% 17%);
+  --muted-foreground: hsl(215 20% 65%);
+  --accent: hsl(160 84% 45%);
+  --accent-foreground: hsl(222 47% 11%);
+  --destructive: hsl(0 62% 55%);
+  --destructive-foreground: hsl(222 47% 11%);
+  --border: hsl(217 33% 17%);
+  --input: hsl(217 33% 17%);
+  --ring: hsl(213 94% 68%);
+
+  --severity-low-bg: hsl(142 76% 36%);
+  --severity-low-fg: hsl(138 76% 97%);
+  --severity-moderate-bg: hsl(32 95% 44%);
+  --severity-moderate-fg: hsl(48 100% 96%);
+  --severity-high-bg: hsl(0 72% 51%);
+  --severity-high-fg: hsl(0 86% 97%);
+  --severity-critical-bg: hsl(262 83% 58%);
+  --severity-critical-fg: hsl(250 100% 98%);
 }
 
-h1, h2, h3 {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-severity-low: var(--severity-low);
+  --color-severity-low-bg: var(--severity-low-bg);
+  --color-severity-low-fg: var(--severity-low-fg);
+  --color-severity-moderate: var(--severity-moderate);
+  --color-severity-moderate-bg: var(--severity-moderate-bg);
+  --color-severity-moderate-fg: var(--severity-moderate-fg);
+  --color-severity-high: var(--severity-high);
+  --color-severity-high-bg: var(--severity-high-bg);
+  --color-severity-high-fg: var(--severity-high-fg);
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-critical-bg: var(--severity-critical-bg);
+  --color-severity-critical-fg: var(--severity-critical-fg);
+
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
-a { text-decoration: none; color: inherit; }
-button { font-family: inherit; cursor: pointer; }
-input, select, textarea { font-family: inherit; }
+/* Tailwind's own Preflight already provides the box-sizing/margin/padding
+   reset, correctly layered — a duplicate unlayered copy used to live here,
+   which silently broke every margin/padding utility (space-y-*, mb-*, p-*,
+   etc.) across the whole app, since unlayered CSS always wins the cascade
+   over layered CSS regardless of specificity. Do not re-add it. */
 
-/* ── Auth shared styles ── */
-.auth-wrapper {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-  background: linear-gradient(135deg, var(--blue-light) 0%, #f0fdf4 100%);
-}
-.auth-card {
-  background: var(--white);
-  border-radius: 16px;
-  border: 0.5px solid var(--border);
-  padding: 2rem;
-  width: 100%;
-  max-width: 420px;
-  box-shadow: 0 4px 24px rgba(15,39,68,0.07);
-}
-.auth-logo { display: flex; align-items: center; gap: 8px; margin-bottom: 1.5rem; }
-.auth-logo-icon {
-  width: 36px; height: 36px;
-  background: var(--blue);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--white);
-}
-.auth-logo-name { font-size: 18px; font-weight: 700; color: var(--navy); font-family: 'Plus Jakarta Sans', sans-serif; }
-.auth-title { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 0.25rem; }
-.auth-subtitle { font-size: 13px; color: var(--text-body); margin-bottom: 1.5rem; line-height: 1.6; }
+/*
+  All base-element defaults live inside @layer base (not as plain unlayered
+  rules) so Tailwind utility classes — which live in @layer utilities, later
+  in the cascade layer order — can actually override them. An unlayered rule
+  always wins over ANY layered rule regardless of specificity, which is
+  exactly what silently broke `text-*` color utilities on <a> elements
+  earlier (this `a { color: inherit }` was overriding every text-color
+  utility applied directly to a Link/anchor, no matter how specific).
+*/
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
 
-.form-group { margin-bottom: 1rem; }
-.form-label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 5px; }
-.form-input {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  font-size: 14px;
-  color: var(--navy);
-  background: #f8fafc;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.form-input:focus { border-color: var(--blue); background: var(--white); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-.form-error { font-size: 11px; color: #ef4444; margin-top: 4px; }
+  h1, h2, h3 {
+    font-family: var(--font-heading);
+  }
 
-.btn-blue {
-  width: 100%;
-  padding: 11px;
-  background: var(--blue);
-  color: var(--white);
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background 0.2s, transform 0.1s;
-  margin-top: 0.5rem;
+  a { text-decoration: none; color: inherit; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
 }
-.btn-blue:hover { background: var(--blue-dark); }
-.btn-blue:active { transform: scale(0.99); }
-.btn-blue:disabled { background: #93c5fd; cursor: not-allowed; }
-.auth-switch { text-align: center; font-size: 13px; color: var(--text-body); margin-top: 1rem; }
-.auth-switch a { color: var(--blue); font-weight: 600; }

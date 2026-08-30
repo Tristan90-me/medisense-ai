@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const {
-  startSession, sendMessage, getSummary,
+  startSession, sendMessage, sendMessageStream, getSummary,
   getSessions, getSession, assistantChat,
 } = require('../controllers/aiController');
 const { protect } = require('../middleware/auth');
 
 router.post('/session/start', protect, startSession);
 router.post('/session/message', protect, sendMessage);
+router.post('/session/message/stream', protect, sendMessageStream);
 router.get('/session/:id/summary', protect, getSummary);
 router.get('/sessions', protect, getSessions);
 router.get('/session/:id', protect, getSession);

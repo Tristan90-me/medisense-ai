@@ -26,6 +26,11 @@ const UserSchema = new mongoose.Schema({
     expiresAt: Date,
     createdAt: { type: Date, default: Date.now },
   }],
+
+  // Admin invite (set-initial-password)
+  adminInviteToken: String,
+  adminInviteExpires: Date,
+  invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
 UserSchema.pre('save', async function () {
@@ -65,6 +70,13 @@ UserSchema.methods.isTrustedDevice = function (token) {
   if (!token) return false;
   const now = new Date();
   return this.trustedDevices.some(d => d.token === token && d.expiresAt > now);
+};
+
+UserSchema.methods.generateAdminInviteToken = function () {
+  const token = crypto.randomBytes(32).toString('hex');
+  this.adminInviteToken = crypto.createHash('sha256').update(token).digest('hex');
+  this.adminInviteExpires = Date.now() + 24 * 60 * 60 * 1000;
+  return token;
 };
 
 module.exports = mongoose.model('User', UserSchema);

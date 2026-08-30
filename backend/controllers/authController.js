@@ -129,6 +129,34 @@ exports.login = async (req, res) => {
   }
 };
 
+// ── Resend Login OTP ────────────────────────────────────────
+// Only actually sends a new code if the account genuinely has a live pending
+// OTP (i.e. mid-login-flow) — otherwise responds identically without sending
+// anything, so this can't be used to probe account existence or spam an
+// email that isn't mid-login.
+exports.resendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email)
+      return res.status(400).json({ success: false, message: 'Email is required' });
+
+    const user = await User.findOne({ email });
+    if (user && user.loginOtp && user.loginOtpExpires > Date.now()) {
+      const otp = user.generateOtp();
+      await user.save({ validateBeforeSave: false });
+      await sendEmail({
+        to: user.email,
+        subject: 'Your MediSense AI login code',
+        html: otpEmailTemplate(user.name, otp),
+      });
+    }
+
+    res.json({ success: true, message: 'If a login is in progress for that email, a new code has been sent.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ── Verify OTP (step 2 — complete login) ──────────────────
 exports.verifyOtp = async (req, res) => {
   try {

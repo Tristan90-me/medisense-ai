@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Activity, CheckCircle, XCircle } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
@@ -18,39 +21,61 @@ export default function VerifyEmail() {
   }, []);
 
   return (
-    <div className="auth-wrapper">
-      <div className="auth-card" style={{ textAlign: 'center' }}>
-        <div className="auth-logo" style={{ justifyContent: 'center' }}>
-          <div className="auth-logo-icon"><Activity size={20} /></div>
-          <span className="auth-logo-name">MediSense AI</span>
-        </div>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-severity-low-bg px-4 py-8">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-[420px]"
+      >
+        <Card className="rounded-2xl border-border/70 text-center shadow-lg">
+          <CardContent className="p-8">
+            <div className="mb-6 flex items-center justify-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+                <Activity size={20} />
+              </div>
+              <span className="font-heading text-lg font-bold text-foreground">MediSense AI</span>
+            </div>
 
-        {status === 'loading' && (
-          <>
-            <p className="auth-subtitle">Verifying your email...</p>
-            <div style={{ width: 40, height: 40, border: '3px solid #dbeafe', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '1rem auto' }} />
-          </>
-        )}
+            <AnimatePresence mode="wait">
+              {status === 'loading' && (
+                <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <p className="mb-4 text-sm text-muted-foreground">Verifying your email...</p>
+                  <Loader2 size={36} className="mx-auto animate-spin text-primary" />
+                </motion.div>
+              )}
 
-        {status === 'success' && (
-          <>
-            <CheckCircle size={48} color="#22c55e" style={{ margin: '0 auto 1rem' }} />
-            <h1 className="auth-title">Email verified!</h1>
-            <p className="auth-subtitle">{message}</p>
-            <button className="btn-blue" onClick={() => navigate('/login')}>Go to login</button>
-          </>
-        )}
+              {status === 'success' && (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+                >
+                  <CheckCircle size={48} className="mx-auto mb-4 text-severity-low" />
+                  <h1 className="mb-1 font-heading text-xl font-bold text-foreground">Email verified!</h1>
+                  <p className="mb-6 text-sm text-muted-foreground">{message}</p>
+                  <Button className="w-full rounded-full" onClick={() => navigate('/login')}>Go to login</Button>
+                </motion.div>
+              )}
 
-        {status === 'error' && (
-          <>
-            <XCircle size={48} color="#ef4444" style={{ margin: '0 auto 1rem' }} />
-            <h1 className="auth-title">Verification failed</h1>
-            <p className="auth-subtitle">{message}</p>
-            <button className="btn-blue" onClick={() => navigate('/register')}>Back to register</button>
-          </>
-        )}
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              {status === 'error' && (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+                >
+                  <XCircle size={48} className="mx-auto mb-4 text-severity-high" />
+                  <h1 className="mb-1 font-heading text-xl font-bold text-foreground">Verification failed</h1>
+                  <p className="mb-6 text-sm text-muted-foreground">{message}</p>
+                  <Button className="w-full rounded-full" onClick={() => navigate('/register')}>Back to register</Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

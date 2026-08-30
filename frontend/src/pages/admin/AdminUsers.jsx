@@ -1,11 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Shield, Search, ChevronLeft,
+  Search, ChevronLeft,
   ChevronRight, CheckCircle, XCircle, User,
 } from 'lucide-react';
-import api from '../../api/axios';
-import './Admin.css';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import adminApi from '../../api/adminApi';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table, TableHeader, TableBody, TableHead, TableCell,
+} from '@/components/ui/table';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
+const ROW_CLASS = 'border-b transition-colors hover:bg-muted/50 last:border-0';
 
 export default function AdminUsers() {
   const navigate = useNavigate();
@@ -16,16 +31,17 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(null);
+  const [confirmUser, setConfirmUser] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/admin/users', { params: { page, limit: 20, search } });
+      const res = await adminApi.get('/admin/users', { params: { page, limit: 20, search } });
       setUsers(res.data.users);
       setTotal(res.data.total);
       setPages(res.data.pages);
     } catch {
-      navigate('/dashboard');
+      navigate('/admin/login');
     } finally {
       setLoading(false);
     }
@@ -38,48 +54,31 @@ export default function AdminUsers() {
     setPage(1);
   };
 
-  const handleToggle = async (userId, currentStatus) => {
-    if (!window.confirm(`${currentStatus ? 'Deactivate' : 'Activate'} this user?`)) return;
+  const confirmToggle = async () => {
+    if (!confirmUser) return;
+    const { _id: userId } = confirmUser;
+    setConfirmUser(null);
     setToggling(userId);
     try {
-      await api.patch(`/admin/users/${userId}/toggle`);
+      await adminApi.patch(`/admin/users/${userId}/toggle`);
       setUsers(prev => prev.map(u =>
         u._id === userId ? { ...u, isActive: !u.isActive } : u
       ));
     } catch {
-      alert('Failed to update user status');
+      toast.error('Failed to update user status');
     } finally {
       setToggling(null);
     }
   };
 
   return (
-    <div className="admin-root">
-      {/* Header */}
-      <div className="admin-header">
-        <button className="admin-back" onClick={() => navigate('/admin')}>
-          <ArrowLeft size={18} />
-        </button>
-        <div className="admin-header-center">
-          <div className="admin-header-icon"><Shield size={16} /></div>
-          <div>
-            <p className="admin-title">User Management</p>
-            <p className="admin-sub">{total} user{total !== 1 ? 's' : ''} total</p>
-          </div>
-        </div>
-        <div className="admin-nav-btns">
-          <button className="admin-nav-btn" onClick={() => navigate('/admin')}>Overview</button>
-          <button className="admin-nav-btn active">Users</button>
-          <button className="admin-nav-btn" onClick={() => navigate('/admin/sessions')}>Sessions</button>
-        </div>
-      </div>
-
-      <div className="admin-body">
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto flex max-w-[960px] flex-col gap-4 px-4 py-5">
         {/* Search */}
-        <div className="admin-search-wrap">
-          <Search size={15} className="admin-search-icon" />
-          <input
-            className="admin-search"
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="rounded-[10px] pl-9"
             placeholder="Search by name or email..."
             value={search}
             onChange={handleSearch}
@@ -87,95 +86,142 @@ export default function AdminUsers() {
         </div>
 
         {/* Table */}
-        <div className="admin-card" style={{ padding: 0, overflow: 'hidden' }}>
-          {loading ? (
-            <div className="admin-loading" style={{ minHeight: 200 }}>
-              <div className="admin-spinner" />
-            </div>
-          ) : (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Sessions</th>
-                  <th>Verified</th>
-                  <th>Joined</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u._id}>
-                    <td>
-                      <div className="admin-user-cell">
-                        <div className="admin-user-avatar">
+        <Card className="gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none">
+          <Table>
+            <TableHeader>
+              <tr className="border-b bg-muted/40">
+                <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">User</TableHead>
+                <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Role</TableHead>
+                <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Sessions</TableHead>
+                <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Verified</TableHead>
+                <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Joined</TableHead>
+                <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</TableHead>
+                <TableHead className="h-auto py-2.5" />
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className={ROW_CLASS}>
+                    {Array.from({ length: 7 }).map((__, j) => (
+                      <TableCell key={j} className="py-3">
+                        <Skeleton className="h-4 w-full max-w-24" />
+                      </TableCell>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                users.map((u, i) => (
+                  <motion.tr
+                    key={u._id}
+                    className={ROW_CLASS}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, delay: Math.min(i, 12) * 0.03, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                           <User size={14} />
                         </div>
                         <div>
-                          <p className="admin-user-name">{u.name}</p>
-                          <p className="admin-user-email">{u.email}</p>
+                          <p className="text-[13px] font-medium text-foreground">{u.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{u.email}</p>
                         </div>
                       </div>
-                    </td>
-                    <td>
-                      <span className={`admin-role-badge ${u.role}`}>{u.role}</span>
-                    </td>
-                    <td style={{ fontSize: 13, color: '#64748b' }}>{u.sessionCount}</td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={u.role === 'admin'
+                        ? 'bg-severity-moderate-bg text-severity-moderate-fg'
+                        : 'bg-primary/10 text-primary'}>
+                        {u.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-[13px] text-muted-foreground">{u.sessionCount}</TableCell>
+                    <TableCell>
                       {u.isEmailVerified
-                        ? <CheckCircle size={15} color="#22c55e" />
-                        : <XCircle size={15} color="#ef4444" />
+                        ? <CheckCircle size={15} className="text-severity-low" />
+                        : <XCircle size={15} className="text-severity-high" />
                       }
-                    </td>
-                    <td style={{ fontSize: 12, color: '#94a3b8' }}>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
                       {new Date(u.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td>
-                      <span className={`admin-status-badge ${u.isActive ? 'active' : 'inactive'}`}>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={u.isActive
+                        ? 'bg-severity-low-bg text-severity-low-fg'
+                        : 'bg-severity-high-bg text-severity-high-fg'}>
                         {u.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       {u.role !== 'admin' && (
-                        <button
-                          className={`admin-toggle-btn ${u.isActive ? 'deactivate' : 'activate'}`}
-                          onClick={() => handleToggle(u._id, u.isActive)}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className={`rounded-full ${u.isActive
+                            ? 'bg-severity-high-bg text-severity-high-fg hover:bg-severity-high-bg/70'
+                            : 'bg-severity-low-bg text-severity-low-fg hover:bg-severity-low-bg/70'}`}
+                          onClick={() => setConfirmUser(u)}
                           disabled={toggling === u._id}
                         >
                           {toggling === u._id ? '...' : u.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
+                        </Button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </TableCell>
+                  </motion.tr>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Card>
 
         {/* Pagination */}
         {pages > 1 && (
-          <div className="admin-pagination">
-            <button
-              className="admin-page-btn"
+          <div className="flex items-center justify-center gap-3">
+            <Button
+              size="icon-sm"
+              variant="outline"
               onClick={() => setPage(p => p - 1)}
               disabled={page === 1}
             >
               <ChevronLeft size={15} />
-            </button>
-            <span className="admin-page-info">Page {page} of {pages}</span>
-            <button
-              className="admin-page-btn"
+            </Button>
+            <span className="text-sm text-muted-foreground">Page {page} of {pages}</span>
+            <Button
+              size="icon-sm"
+              variant="outline"
               onClick={() => setPage(p => p + 1)}
               disabled={page === pages}
             >
               <ChevronRight size={15} />
-            </button>
+            </Button>
           </div>
         )}
       </div>
+
+      {/* Deactivate/Activate confirmation */}
+      <AlertDialog open={!!confirmUser} onOpenChange={(open) => !open && setConfirmUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmUser?.isActive ? 'Deactivate' : 'Activate'} this user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmUser?.isActive
+                ? `${confirmUser?.name} will immediately lose access to their account.`
+                : `${confirmUser?.name} will regain access to their account.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmToggle}
+              className={confirmUser?.isActive ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              {confirmUser?.isActive ? 'Deactivate' : 'Activate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

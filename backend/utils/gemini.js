@@ -128,8 +128,8 @@ const parseAIResponse = (rawText) => {
   return result;
 };
 
-// ─── Main Chat Function ────────────────────────────────────────────────────
-const chat = async (history, healthProfile = null) => {
+// ─── System Prompt + Health Profile ────────────────────────────────────────
+const buildSystemPrompt = (healthProfile) => {
   let systemPrompt = MEDISENSE_SYSTEM_PROMPT;
 
   if (healthProfile) {
@@ -139,8 +139,8 @@ USER HEALTH PROFILE:
 - Age: ${healthProfile.dateOfBirth ? new Date().getFullYear() - new Date(healthProfile.dateOfBirth).getFullYear() : "Unknown"}
 - Sex: ${healthProfile.sex || "Unknown"}
 - Blood Type: ${healthProfile.bloodType || "Unknown"}
-- Pre-existing Conditions: ${healthProfile.conditions?.join(", ") || "None reported"}
-- Current Medications: ${healthProfile.medications?.join(", ") || "None reported"}
+- Pre-existing Conditions: ${healthProfile.preExistingConditions?.join(", ") || "None reported"}
+- Current Medications: ${healthProfile.currentMedications?.join(", ") || "None reported"}
 - Allergies: ${healthProfile.allergies?.join(", ") || "None reported"}
 - Family History: ${healthProfile.familyHistory?.join(", ") || "None reported"}
 - Smoking: ${healthProfile.smokingStatus || "Unknown"}
@@ -148,13 +148,18 @@ USER HEALTH PROFILE:
 `;
   }
 
+  return systemPrompt;
+};
+
+// ─── Main Chat Function (non-streaming) ────────────────────────────────────
+const chat = async (history, healthProfile = null) => {
   const messages = buildMessages(history);
 
   const response = await ai.models.generateContent({
     model: "gemini-3.5-flash-lite",
     contents: messages,
     config: {
-      systemInstruction: systemPrompt,
+      systemInstruction: buildSystemPrompt(healthProfile),
       temperature: 0.4,
       maxOutputTokens: 1024,
     },
@@ -162,6 +167,37 @@ USER HEALTH PROFILE:
 
   const rawText = response.text;
   return parseAIResponse(rawText);
+};
+
+// ─── Streaming Chat Function ───────────────────────────────────────────────
+// Yields incremental text deltas as they arrive from Gemini, then returns the
+// fully parsed response once the stream ends. Bracket-tagged metadata
+// ([EMERGENCY], [SEVERITY:...], etc.) can split across chunk boundaries, so
+// callers must NOT parse individual chunks — only the accumulated full text
+// once done() resolves.
+const chatStream = async (history, healthProfile, onChunk) => {
+  const messages = buildMessages(history);
+
+  const stream = await ai.models.generateContentStream({
+    model: "gemini-3.5-flash-lite",
+    contents: messages,
+    config: {
+      systemInstruction: buildSystemPrompt(healthProfile),
+      temperature: 0.4,
+      maxOutputTokens: 1024,
+    },
+  });
+
+  let fullText = "";
+  for await (const chunk of stream) {
+    const delta = chunk.text;
+    if (delta) {
+      fullText += delta;
+      onChunk(delta);
+    }
+  }
+
+  return parseAIResponse(fullText);
 };
 
 // ─── Summary Generator ─────────────────────────────────────────────────────
@@ -195,4 +231,4 @@ Keep it plain, warm, and clear. No markdown. No brackets.
   return response.text;
 };
 
-module.exports = { chat, generateSummary, MEDISENSE_SYSTEM_PROMPT };
+module.exports = { chat, chatStream, generateSummary, MEDISENSE_SYSTEM_PROMPT };

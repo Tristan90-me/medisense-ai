@@ -51,4 +51,19 @@ const otpEmailTemplate = (name, otp) => `
   </div>
 `;
 
-module.exports = { sendEmail, verificationEmailTemplate, otpEmailTemplate };
+const adminInviteEmailTemplate = (name, link, inviterName) => `
+  <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:2rem;background:#f8faff;border-radius:12px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:1.5rem;">
+      <div style="width:32px;height:32px;background:#0f2744;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#fff;font-size:16px;">✚</span>
+      </div>
+      <span style="font-size:18px;font-weight:700;color:#0f2744;">MediSense AI — Admin</span>
+    </div>
+    <h2 style="color:#0f2744;font-size:20px;margin-bottom:0.5rem;">You've been invited as an admin</h2>
+    <p style="color:#475569;font-size:14px;line-height:1.7;">Hi ${name}, ${inviterName} has invited you to administer MediSense AI. Click the button below to set your password and activate your admin account.</p>
+    <a href="${link}" style="display:inline-block;margin:1.5rem 0;padding:12px 28px;background:#0f2744;color:#fff;border-radius:24px;text-decoration:none;font-size:14px;font-weight:600;">Set up my admin account</a>
+    <p style="color:#94a3b8;font-size:12px;">This link expires in 24 hours. If you weren't expecting this invite, you can safely ignore this email.</p>
+  </div>
+`;
+
+module.exports = { sendEmail, verificationEmailTemplate, otpEmailTemplate, adminInviteEmailTemplate };

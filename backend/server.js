@@ -26,6 +26,7 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/admin/auth', require('./routes/adminAuth'));
 app.use('/api/admin', require('./routes/admin'));
 
 app.get('/api/health', (req, res) => res.json({
