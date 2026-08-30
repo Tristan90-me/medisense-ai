@@ -73,6 +73,47 @@ const buildMessages = (history) => {
 };
 
 // ─── Parse AI Response ─────────────────────────────────────────────────────
+// Non-greedy regex (`/\{.*?\}/`) stops at the FIRST close-bracket, which
+// breaks as soon as the tagged JSON contains a nested array of objects (e.g.
+// DIAGNOSIS's `conditions` array) — the last condition's `}` followed by the
+// array's `]` forms a premature "}]" the regex mistakes for the end. This
+// walks bracket depth (ignoring brackets inside string literals) to find the
+// actual matching close, so it works regardless of nesting.
+const extractTaggedValue = (text, tag, openChar, closeChar) => {
+  const marker = `[${tag}:`;
+  const start = text.indexOf(marker);
+  if (start === -1) return null;
+
+  const valueStart = start + marker.length;
+  if (text[valueStart] !== openChar) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let i = valueStart;
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === openChar) depth++;
+    else if (ch === closeChar) {
+      depth--;
+      if (depth === 0) {
+        i++;
+        break;
+      }
+    }
+  }
+
+  if (text[i] !== "]") return null;
+  return { json: text.slice(valueStart, i), fullMatch: text.slice(start, i + 1) };
+};
+
 const parseAIResponse = (rawText) => {
   const result = {
     text: rawText,
@@ -90,40 +131,45 @@ const parseAIResponse = (rawText) => {
   }
 
   // Severity
-  const severityMatch = rawText.match(/\[SEVERITY:(\{.*?\})\]/s);
+  const severityMatch = extractTaggedValue(rawText, "SEVERITY", "{", "}");
   if (severityMatch) {
     try {
-      result.severity = JSON.parse(severityMatch[1]);
+      result.severity = JSON.parse(severityMatch.json);
     } catch {}
-    result.text = result.text.replace(severityMatch[0], "").trim();
+    result.text = result.text.replace(severityMatch.fullMatch, "").trim();
   }
 
   // Symptoms
-  const symptomsMatch = rawText.match(/\[SYMPTOMS:(\{.*?\})\]/s);
+  const symptomsMatch = extractTaggedValue(rawText, "SYMPTOMS", "{", "}");
   if (symptomsMatch) {
     try {
-      result.symptoms = JSON.parse(symptomsMatch[1]);
+      result.symptoms = JSON.parse(symptomsMatch.json);
     } catch {}
-    result.text = result.text.replace(symptomsMatch[0], "").trim();
+    result.text = result.text.replace(symptomsMatch.fullMatch, "").trim();
   }
 
   // Diagnosis
-  const diagnosisMatch = rawText.match(/\[DIAGNOSIS:(\{.*?\})\]/s);
+  const diagnosisMatch = extractTaggedValue(rawText, "DIAGNOSIS", "{", "}");
   if (diagnosisMatch) {
     try {
-      result.diagnosis = JSON.parse(diagnosisMatch[1]);
+      result.diagnosis = JSON.parse(diagnosisMatch.json);
     } catch {}
-    result.text = result.text.replace(diagnosisMatch[0], "").trim();
+    result.text = result.text.replace(diagnosisMatch.fullMatch, "").trim();
   }
 
   // Suggestions
-  const suggestionsMatch = rawText.match(/\[SUGGESTIONS:(\[.*?\])\]/s);
+  const suggestionsMatch = extractTaggedValue(rawText, "SUGGESTIONS", "[", "]");
   if (suggestionsMatch) {
     try {
-      result.suggestions = JSON.parse(suggestionsMatch[1]);
+      result.suggestions = JSON.parse(suggestionsMatch.json);
     } catch {}
-    result.text = result.text.replace(suggestionsMatch[0], "").trim();
+    result.text = result.text.replace(suggestionsMatch.fullMatch, "").trim();
   }
+
+  // Removing a tag from the middle of a sentence leaves the space that
+  // separated it from its neighbors behind on both sides — collapse those
+  // (horizontal whitespace only, so intentional paragraph breaks survive).
+  result.text = result.text.replace(/[ \t]{2,}/g, " ").trim();
 
   return result;
 };
@@ -231,4 +277,4 @@ Keep it plain, warm, and clear. No markdown. No brackets.
   return response.text;
 };
 
-module.exports = { chat, chatStream, generateSummary, MEDISENSE_SYSTEM_PROMPT };
+module.exports = { chat, chatStream, generateSummary, parseAIResponse, MEDISENSE_SYSTEM_PROMPT };
