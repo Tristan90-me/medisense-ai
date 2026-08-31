@@ -3,7 +3,7 @@ const router = express.Router();
 const { getProfile, updateProfile } = require('../controllers/profileController');
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
-const { updateProfileRules } = require('../validators/profileValidators');
+const { getProfileRules, updateProfileRules } = require('../validators/profileValidators');
 
 /**
  * @swagger
@@ -12,11 +12,17 @@ const { updateProfileRules } = require('../validators/profileValidators');
  *     tags: [Profile]
  *     summary: Get the current user's health profile
  *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: dependent
+ *         schema: { type: string }
+ *         description: Optional dependent id — returns that dependent's profile instead of the caller's own. Must be owned by the caller.
  *     responses:
  *       200: { description: The health profile (fields may be null/empty if not yet filled in) }
  *       401: { description: Missing or invalid token }
+ *       404: { description: Profile not found, or the given dependent id isn't owned by the caller }
  */
-router.get('/', protect, getProfile);
+router.get('/', protect, validate(getProfileRules), getProfile);
 
 /**
  * @swagger
@@ -32,6 +38,7 @@ router.get('/', protect, getProfile);
  *           schema:
  *             type: object
  *             properties:
+ *               dependent: { type: string, description: Optional dependent id — updates that dependent's profile instead of the caller's own. Must be owned by the caller. }
  *               dateOfBirth: { type: string, format: date }
  *               sex: { type: string, enum: [male, female, other, prefer_not_to_say] }
  *               weight: { type: number, minimum: 0 }

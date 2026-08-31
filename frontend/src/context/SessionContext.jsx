@@ -1,25 +1,11 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+import { createContext, useContext, useState } from 'react';
 import api from '../api/axios';
 
 const SessionContext = createContext();
 
 export const SessionProvider = ({ children }) => {
-  const { isAuthenticated } = useAuth();
   const [activeSession, setActiveSession] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // Auto-restore active session on mount
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const restore = async () => {
-      try {
-        const res = await api.post('/ai/session/start', { mode: 'quick' });
-        if (res.data.resumed) setActiveSession(res.data.session);
-      } catch {}
-    };
-    restore();
-  }, [isAuthenticated]);
 
   const startSession = async (mode = 'quick') => {
     setLoading(true);

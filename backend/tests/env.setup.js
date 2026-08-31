@@ -24,4 +24,3 @@ process.env.EMAIL_FROM = 'MediSense AI <test@medisense.local>';
 // required via app.js). The constructor doesn't make a network call and
 // doesn't throw without a key, but set a dummy value to keep it quiet.
 process.env.GEMINI_API_KEY = 'test-gemini-key';
-process.env.GROQ_API_KEY = 'test-groq-key';

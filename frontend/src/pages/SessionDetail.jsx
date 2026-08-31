@@ -176,6 +176,11 @@ export default function SessionDetail() {
               value: `${session.severityLevel} (${session.severityScore}/10)`,
               className: sev?.fg,
             },
+            session.ruleBasedTriage?.level === 'Critical' && {
+              label: 'Clinical Triage',
+              value: session.severityMismatch ? 'Critical (flagged for review)' : 'Critical',
+              className: 'text-severity-critical-fg',
+            },
           ].filter(Boolean).map((m, i) => (
             <div key={i} className="min-w-[100px]">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{m.label}</p>

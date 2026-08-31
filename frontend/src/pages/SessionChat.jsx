@@ -6,13 +6,14 @@ import { useSession } from '../context/SessionContext';
 import useVoice from '../hooks/useVoice';
 import api from '../api/axios';
 import { streamSessionMessage } from '../api/stream';
+import { listEmergencyContacts } from '../api/emergencyContacts.api';
 import SessionSummary from '../components/SessionSummary';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, ArrowLeft, Activity, Loader2,
+  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert,
 } from 'lucide-react';
 
 const SEVERITY_CLASSES = {
@@ -29,6 +30,7 @@ export default function SessionChat() {
   const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'quick';
   const preloadedSymptoms = searchParams.get('symptoms');
+  const dependentId = searchParams.get('dependent');
 
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -36,14 +38,19 @@ export default function SessionChat() {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [severity, setSeverity] = useState(null);
+  const [ruleBasedTriage, setRuleBasedTriage] = useState(null);
+  const [severityMismatch, setSeverityMismatch] = useState(false);
   const [diagnosis, setDiagnosis] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [emergency, setEmergency] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const streamingIndexRef = useRef(null);
+  const contactsFetchedRef = useRef(false);
 
   const voice = useVoice();
 
@@ -55,10 +62,24 @@ export default function SessionChat() {
     if (voice.transcript) setInput(voice.transcript);
   }, [voice.transcript]);
 
+  // Lazy-fetch emergency contacts only the first time `emergency` flips to
+  // true — guarded by a ref so it never refetches on subsequent renders or
+  // re-triggers of the same session, and never fetches unconditionally on
+  // page load for sessions that never flag an emergency.
+  useEffect(() => {
+    if (emergency && !contactsFetchedRef.current) {
+      contactsFetchedRef.current = true;
+      listEmergencyContacts()
+        .then((data) => setEmergencyContacts(data))
+        .catch(() => setEmergencyContacts([]))
+        .finally(() => setContactsLoaded(true));
+    }
+  }, [emergency]);
+
   useEffect(() => {
     const init = async () => {
       try {
-        const res = await api.post('/ai/session/start', { mode });
+        const res = await api.post('/ai/session/start', { mode, dependentId: dependentId || undefined });
         const s = res.data.session;
         setSession(s);
         setActiveSession(s);
@@ -66,6 +87,8 @@ export default function SessionChat() {
         if (res.data.resumed && s.messages?.length) {
           setMessages(s.messages);
           if (s.severityScore) setSeverity({ score: s.severityScore, level: s.severityLevel });
+          if (s.ruleBasedTriage?.level) setRuleBasedTriage(s.ruleBasedTriage);
+          if (s.severityMismatch) setSeverityMismatch(true);
           if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
           if (s.emergencyDetected) setEmergency(true);
         } else {
@@ -131,6 +154,8 @@ export default function SessionChat() {
         setLoading(false);
         if (event.emergency) setEmergency(true);
         if (event.severity) setSeverity(event.severity);
+        if (event.ruleBasedTriage?.level) setRuleBasedTriage(event.ruleBasedTriage);
+        if (event.severityMismatch) setSeverityMismatch(true);
         if (event.diagnosis) setDiagnosis(event.diagnosis);
         if (event.suggestions?.length) setSuggestions(event.suggestions);
         if (event.sessionStatus === 'completed') {
@@ -149,6 +174,9 @@ export default function SessionChat() {
       },
     });
   };
+
+  const primaryContacts = emergencyContacts.filter((c) => c.isPrimary);
+  const contactsToShow = primaryContacts.length > 0 ? primaryContacts : emergencyContacts.slice(0, 2);
 
   const handleSuggestion = (s) => sendMessage(s);
 
@@ -172,6 +200,7 @@ export default function SessionChat() {
       <AnimatePresence>
         {emergency && (
           <motion.div
+            key="emergency-banner"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -183,6 +212,56 @@ export default function SessionChat() {
               <Phone size={14} /> Call 112
             </a>
             <button onClick={() => setEmergency(false)} className="shrink-0 text-lg leading-none">✕</button>
+          </motion.div>
+        )}
+
+        {emergency && contactsLoaded && (
+          <motion.div
+            key="emergency-contacts"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-b border-destructive/30 bg-card px-4 py-2.5"
+          >
+            {contactsToShow.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Your emergency contact{contactsToShow.length !== 1 ? 's' : ''}
+                </p>
+                {contactsToShow.map((c) => (
+                  <div key={c._id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{c.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{c.relationship || 'Emergency contact'}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-1.5">
+                      <a
+                        href={`tel:${c.phone}`}
+                        className="flex items-center gap-1 rounded-full bg-severity-high-bg px-3 py-1 text-xs font-semibold text-severity-high-fg"
+                      >
+                        <Phone size={13} /> Call
+                      </a>
+                      {c.email && (
+                        <a
+                          href={`mailto:${c.email}`}
+                          className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-foreground"
+                        >
+                          <Mail size={13} /> Email
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => navigate('/emergency-contacts')}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <span className="text-sm text-foreground">You haven't added an emergency contact yet.</span>
+                <span className="shrink-0 text-xs font-semibold text-primary">Add one →</span>
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -208,6 +287,23 @@ export default function SessionChat() {
           {severity && (
             <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', SEVERITY_CLASSES[severity.level])}>
               {severity.level}
+            </span>
+          )}
+          {ruleBasedTriage?.level === 'Critical' && (
+            <span
+              title={
+                severityMismatch
+                  ? 'Our independent clinical triage check flagged this as critical, separate from the AI\'s own severity score above.'
+                  : 'Independent clinical triage check — also flagged critical.'
+              }
+              className={cn(
+                'flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold',
+                severityMismatch
+                  ? 'animate-pulse border-severity-critical bg-severity-critical-bg text-severity-critical-fg'
+                  : 'border-severity-critical/40 bg-severity-critical-bg/60 text-severity-critical-fg'
+              )}
+            >
+              <ShieldAlert size={13} /> Clinical triage
             </span>
           )}
           <Button

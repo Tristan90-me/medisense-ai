@@ -1,10 +1,15 @@
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
+
+exports.getProfileRules = [
+  query('dependent').optional({ nullable: true }).isMongoId().withMessage('Invalid dependent id'),
+];
 
 // All fields are optional (the profile form can be filled in partially/over
 // multiple visits), but whichever are present must be well-formed —
 // mirrors backend/models/HealthProfile.js's own enums as a first line of
 // defense before Mongoose validation runs.
 exports.updateProfileRules = [
+  body('dependent').optional({ nullable: true }).isMongoId().withMessage('Invalid dependent id'),
   body('dateOfBirth').optional({ nullable: true }).isISO8601().withMessage('dateOfBirth must be a valid date'),
   body('sex').optional({ nullable: true }).isIn(['male', 'female', 'other', 'prefer_not_to_say']).withMessage('Invalid sex value'),
   body('weight').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Weight must be a positive number'),

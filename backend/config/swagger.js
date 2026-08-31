@@ -45,6 +45,11 @@ const options = {
     tags: [
       { name: 'Auth', description: 'Consumer registration, login, and OTP verification' },
       { name: 'Profile', description: 'Consumer health profile' },
+      { name: 'Dependents', description: 'Family members managed under a consumer account' },
+      { name: 'Emergency Contacts', description: 'Per-user emergency contacts (no dependent scoping)' },
+      { name: 'Account', description: 'Account profile, password, trusted devices, and self-service account deletion' },
+      { name: 'Medications', description: 'Structured, trackable medications for the user and their dependents (separate from HealthProfile.currentMedications free-text self-report)' },
+      { name: 'Health Score', description: 'Composite wellness score, sub-score breakdown, and gamified achievements — recomputed on demand from session/profile/medication data' },
       { name: 'AI', description: 'Guided symptom-check sessions and the floating assistant chat' },
       { name: 'Admin Auth', description: 'Admin login/OTP/invite-acceptance — entirely separate from consumer auth' },
       { name: 'Admin', description: 'Admin-only user/session management and admin provisioning (adminOnly)' },

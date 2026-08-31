@@ -17,6 +17,11 @@ import BodyMapPage from './pages/BodyMapPage';
 import History from './pages/History';
 import SessionDetail from './pages/SessionDetail';
 import HealthStats from './pages/HealthStats';
+import Dependents from './pages/Dependents';
+import AccountSettings from './pages/AccountSettings';
+import EmergencyContacts from './pages/EmergencyContacts';
+import Medications from './pages/Medications';
+import HealthScoreAchievements from './pages/HealthScoreAchievements';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallPrompt from './components/InstallPrompt';
 import VerifyEmail from './pages/VerifyEmail';
@@ -102,6 +107,11 @@ function ConsumerApp() {
                 <Route path="/history" element={<PrivateRoute><PageTransition><History /></PageTransition></PrivateRoute>} />
                 <Route path="/history/:id" element={<PrivateRoute><PageTransition><SessionDetail /></PageTransition></PrivateRoute>} />
                 <Route path="/health-stats" element={<PrivateRoute><PageTransition><HealthStats /></PageTransition></PrivateRoute>} />
+                <Route path="/dependents" element={<PrivateRoute><PageTransition><Dependents /></PageTransition></PrivateRoute>} />
+                <Route path="/account-settings" element={<PrivateRoute><PageTransition><AccountSettings /></PageTransition></PrivateRoute>} />
+                <Route path="/emergency-contacts" element={<PrivateRoute><PageTransition><EmergencyContacts /></PageTransition></PrivateRoute>} />
+                <Route path="/medications" element={<PrivateRoute><PageTransition><Medications /></PageTransition></PrivateRoute>} />
+                <Route path="/health-score" element={<PrivateRoute><PageTransition><HealthScoreAchievements /></PageTransition></PrivateRoute>} />
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </AnimatePresence>

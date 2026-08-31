@@ -32,6 +32,11 @@ app.use(express.json());
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/profile', require('./routes/profile'));
+app.use('/api/dependents', require('./routes/dependents'));
+app.use('/api/emergency-contacts', require('./routes/emergencyContacts'));
+app.use('/api/account', require('./routes/account'));
+app.use('/api/medications', require('./routes/medications'));
+app.use('/api/health-score', require('./routes/healthScore'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/admin/auth', require('./routes/adminAuth'));
 app.use('/api/admin', require('./routes/admin'));

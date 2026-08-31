@@ -1,15 +1,22 @@
 const Session = require("../models/Session");
 const HealthProfile = require("../models/HealthProfile");
 const { chat, chatStream, generateSummary } = require("../utils/gemini");
+const { resolveDependentId } = require("../utils/resolveDependent");
+const { computeTriageScore } = require("../utils/triage");
 
 // ─── Start or Resume Session ───────────────────────────────────────────────
 const startSession = async (req, res) => {
   try {
-    const { mode = "quick" } = req.body;
+    const { mode = "quick", dependentId } = req.body;
+    const dependent = await resolveDependentId(dependentId, req.user.id);
 
-    // Resume existing active session if exists
+    // Resume existing active session for this same person (self or
+    // dependent) if one exists — scoped by dependent too, so an in-progress
+    // self session is never accidentally resumed while starting a check-in
+    // for a dependent, or vice versa.
     const existing = await Session.findOne({
       user: req.user.id,
+      dependent,
       status: "active",
     }).sort({ createdAt: -1 });
 
@@ -19,6 +26,7 @@ const startSession = async (req, res) => {
 
     const session = await Session.create({
       user: req.user.id,
+      dependent,
       mode,
       messages: [],
     });
@@ -26,7 +34,7 @@ const startSession = async (req, res) => {
     res.status(201).json({ session, resumed: false });
   } catch (err) {
     console.error("startSession error:", err);
-    res.status(500).json({ message: "Failed to start session" });
+    res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : "Failed to start session" });
   }
 };
 
@@ -47,8 +55,12 @@ const sendMessage = async (req, res) => {
     // Add user message
     session.messages.push({ role: "user", content: message });
 
-    // Get health profile for risk stratification
-    const healthProfile = await HealthProfile.findOne({ user: req.user.id });
+    // Get health profile for risk stratification — scoped to whichever
+    // person (self or dependent) this session is about.
+    const healthProfile = await HealthProfile.findOne({
+      user: req.user.id,
+      dependent: session.dependent || null,
+    });
 
     // Build history for Gemini (exclude system messages)
     const history = session.messages.map((m) => ({
@@ -90,6 +102,15 @@ const sendMessage = async (req, res) => {
       session.status = "completed";
     }
 
+    // Independent rule-based cross-check — computed from the same
+    // just-updated symptom list, never from the LLM's own severity output.
+    const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile);
+    session.ruleBasedTriage = ruleBasedTriage;
+    session.severityMismatch =
+      ruleBasedTriage.level === "Critical" &&
+      parsed.severity?.level !== "Critical" &&
+      !parsed.emergency;
+
     await session.save();
 
     res.json({
@@ -100,6 +121,8 @@ const sendMessage = async (req, res) => {
       diagnosis: parsed.diagnosis,
       suggestions: parsed.suggestions,
       sessionStatus: session.status,
+      ruleBasedTriage,
+      severityMismatch: session.severityMismatch,
     });
   } catch (err) {
     console.error("sendMessage error:", err);
@@ -135,7 +158,10 @@ const sendMessageStream = async (req, res) => {
 
     session.messages.push({ role: "user", content: message });
 
-    const healthProfile = await HealthProfile.findOne({ user: req.user.id });
+    const healthProfile = await HealthProfile.findOne({
+      user: req.user.id,
+      dependent: session.dependent || null,
+    });
 
     const history = session.messages.map((m) => ({
       role: m.role,
@@ -174,6 +200,13 @@ const sendMessageStream = async (req, res) => {
       session.status = "completed";
     }
 
+    const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile);
+    session.ruleBasedTriage = ruleBasedTriage;
+    session.severityMismatch =
+      ruleBasedTriage.level === "Critical" &&
+      parsed.severity?.level !== "Critical" &&
+      !parsed.emergency;
+
     await session.save();
 
     send({
@@ -185,6 +218,8 @@ const sendMessageStream = async (req, res) => {
       diagnosis: parsed.diagnosis,
       suggestions: parsed.suggestions,
       sessionStatus: session.status,
+      ruleBasedTriage,
+      severityMismatch: session.severityMismatch,
     });
     res.end();
   } catch (err) {

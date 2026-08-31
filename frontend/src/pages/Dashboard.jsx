@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import {
   Activity, Map, Zap, ClipboardList,
   LogOut, History, TrendingUp,
-  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle,
+  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, PhoneCall, Settings, Pill, Trophy,
 } from 'lucide-react';
 
 const colorClasses = {
@@ -126,6 +126,41 @@ export default function Dashboard() {
       title: 'Health Stats',
       desc: 'Severity trends & symptom insights',
       onClick: () => navigate('/health-stats'),
+    },
+    {
+      icon: Users,
+      color: 'accent',
+      title: 'Family & Dependents',
+      desc: 'Manage profiles for family members',
+      onClick: () => navigate('/dependents'),
+    },
+    {
+      icon: PhoneCall,
+      color: 'critical',
+      title: 'Emergency Contacts',
+      desc: 'Who to reach in an emergency',
+      onClick: () => navigate('/emergency-contacts'),
+    },
+    {
+      icon: Pill,
+      color: 'primary',
+      title: 'Medications',
+      desc: 'Track dosage, frequency & reminders',
+      onClick: () => navigate('/medications'),
+    },
+    {
+      icon: Settings,
+      color: 'muted',
+      title: 'Account Settings',
+      desc: 'Profile, password & trusted devices',
+      onClick: () => navigate('/account-settings'),
+    },
+    {
+      icon: Trophy,
+      color: 'secondary',
+      title: 'Health Score',
+      desc: 'Your wellness score & achievements',
+      onClick: () => navigate('/health-score'),
     },
   ];
 

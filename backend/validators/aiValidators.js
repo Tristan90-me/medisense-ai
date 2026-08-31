@@ -2,6 +2,7 @@ const { body, param } = require('express-validator');
 
 exports.startSessionRules = [
   body('mode').optional().isIn(['quick', 'full']).withMessage('mode must be quick or full'),
+  body('dependentId').optional({ nullable: true }).isMongoId().withMessage('Invalid dependentId'),
 ];
 
 exports.sendMessageRules = [

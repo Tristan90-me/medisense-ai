@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -67,6 +67,8 @@ const stepVariants = {
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const dependentId = searchParams.get('dependent');
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -98,6 +100,7 @@ export default function Onboarding() {
     try {
       const payload = {
         ...values,
+        dependent: dependentId || undefined,
         preExistingConditions: values.preExistingConditions.split(',').map((s) => s.trim()).filter(Boolean),
         allergies: values.allergies.split(',').map((s) => s.trim()).filter(Boolean),
         currentMedications: values.currentMedications.split(',').map((s) => s.trim()).filter(Boolean),
@@ -105,7 +108,7 @@ export default function Onboarding() {
       };
       await api.put('/profile', payload);
       toast.success('Profile saved!');
-      navigate('/dashboard');
+      navigate(dependentId ? '/dependents' : '/dashboard');
     } catch {
       toast.error('Failed to save profile');
     } finally {
@@ -127,7 +130,9 @@ export default function Onboarding() {
               <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
                 <Activity size={20} />
               </div>
-              <span className="font-heading text-lg font-bold text-foreground">MediSense AI</span>
+              <span className="font-heading text-lg font-bold text-foreground">
+                {dependentId ? 'Health Profile' : 'MediSense AI'}
+              </span>
             </div>
 
             {/* Step progress */}
