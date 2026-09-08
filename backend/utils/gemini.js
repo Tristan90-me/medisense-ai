@@ -1,4 +1,5 @@
 const { GoogleGenAI } = require("@google/genai");
+const SystemSetting = require("../models/SystemSetting");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -175,8 +176,17 @@ const parseAIResponse = (rawText) => {
 };
 
 // ─── System Prompt + Health Profile ────────────────────────────────────────
-const buildSystemPrompt = (healthProfile) => {
-  let systemPrompt = MEDISENSE_SYSTEM_PROMPT;
+// `promptOverride`, if given, short-circuits BEFORE the SystemSetting lookup
+// entirely — used by systemSettingController.previewPrompt to let an admin
+// see how a DRAFT (unsaved) prompt behaves without ever persisting it.
+// Otherwise falls back to the admin-saved 'systemPrompt' SystemSetting (if
+// any), then to the hardcoded MEDISENSE_SYSTEM_PROMPT default.
+const buildSystemPrompt = async (healthProfile, promptOverride = null) => {
+  let systemPrompt = promptOverride;
+  if (!systemPrompt) {
+    const saved = await SystemSetting.findOne({ key: 'systemPrompt' });
+    systemPrompt = saved?.value || MEDISENSE_SYSTEM_PROMPT;
+  }
 
   if (healthProfile) {
     systemPrompt += `
@@ -198,14 +208,17 @@ USER HEALTH PROFILE:
 };
 
 // ─── Main Chat Function (non-streaming) ────────────────────────────────────
-const chat = async (history, healthProfile = null) => {
+// `promptOverride` (optional, trailing) is passed straight through to
+// buildSystemPrompt — see its comment above. All existing call sites that
+// don't pass it are unaffected.
+const chat = async (history, healthProfile = null, promptOverride = null) => {
   const messages = buildMessages(history);
 
   const response = await ai.models.generateContent({
     model: "gemini-3.5-flash-lite",
     contents: messages,
     config: {
-      systemInstruction: buildSystemPrompt(healthProfile),
+      systemInstruction: await buildSystemPrompt(healthProfile, promptOverride),
       temperature: 0.4,
       maxOutputTokens: 1024,
     },
@@ -221,14 +234,14 @@ const chat = async (history, healthProfile = null) => {
 // ([EMERGENCY], [SEVERITY:...], etc.) can split across chunk boundaries, so
 // callers must NOT parse individual chunks — only the accumulated full text
 // once done() resolves.
-const chatStream = async (history, healthProfile, onChunk) => {
+const chatStream = async (history, healthProfile, onChunk, promptOverride = null) => {
   const messages = buildMessages(history);
 
   const stream = await ai.models.generateContentStream({
     model: "gemini-3.5-flash-lite",
     contents: messages,
     config: {
-      systemInstruction: buildSystemPrompt(healthProfile),
+      systemInstruction: await buildSystemPrompt(healthProfile, promptOverride),
       temperature: 0.4,
       maxOutputTokens: 1024,
     },
@@ -277,4 +290,64 @@ Keep it plain, warm, and clear. No markdown. No brackets.
   return response.text;
 };
 
-module.exports = { chat, chatStream, generateSummary, parseAIResponse, MEDISENSE_SYSTEM_PROMPT };
+// ─── Photo Analysis ─────────────────────────────────────────────────────────
+// Descriptive (NOT diagnostic) visual observation of a symptom photo (rash,
+// wound, swelling, etc). Uses Gemini's structured-output mechanism
+// (responseMimeType + responseSchema) rather than the bracket-tag convention
+// above — this call is non-streaming, so there's no reason to reuse that
+// text-splicing approach here.
+const PHOTO_ANALYSIS_PROMPT = `
+You are looking at a photo a user has logged of a physical symptom (e.g. a rash, wound, bruise, swelling, or skin change) as part of a personal symptom-tracking app.
+
+Provide a DESCRIPTIVE VISUAL OBSERVATION ONLY. This is explicitly NOT a diagnosis:
+- Never state or imply a specific medical condition, disease name, or diagnosis.
+- Only describe what is visually observable (color, shape, size relative to surrounding area, texture, borders, any visible discharge/swelling/bruising, etc).
+- Use hedged, plain language ("appears to be", "the image shows").
+
+Respond with:
+- "description": a short plain-language paragraph describing what the image shows.
+- "findings": an array of specific, individual visual observations (e.g. "Redness covering approximately 3cm diameter", "Raised, well-defined border").
+- "confidence": how clearly the image supports these findings — "low" (blurry, poor lighting, partially obscured), "moderate", or "high" (clear, well-lit, in focus).
+- "flaggedForReview": true if the image shows visual signs that may warrant prompt in-person medical attention — spreading redness, signs of infection (pus, red streaking), a deep or non-healing wound, significant swelling, or any other visually concerning feature. Otherwise false.
+`;
+
+const PHOTO_ANALYSIS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    description: { type: 'STRING' },
+    findings: { type: 'ARRAY', items: { type: 'STRING' } },
+    confidence: { type: 'STRING', enum: ['low', 'moderate', 'high'] },
+    flaggedForReview: { type: 'BOOLEAN' },
+  },
+  required: ['description', 'findings', 'confidence', 'flaggedForReview'],
+};
+
+// context is an optional caller-supplied string (e.g. the photo's caption or
+// body region) appended to the prompt to give the model a little more to go on.
+const analyzePhoto = async (imageBuffer, mimeType, context = '') => {
+  const promptText = context
+    ? `${PHOTO_ANALYSIS_PROMPT}\n\nAdditional context provided by the user: ${context}`
+    : PHOTO_ANALYSIS_PROMPT;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: [{
+      role: "user",
+      parts: [
+        { text: promptText },
+        { inlineData: { data: imageBuffer.toString("base64"), mimeType } },
+      ],
+    }],
+    config: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      responseSchema: PHOTO_ANALYSIS_SCHEMA,
+    },
+  });
+
+  return JSON.parse(response.text);
+};
+
+module.exports = {
+  chat, chatStream, generateSummary, parseAIResponse, analyzePhoto, MEDISENSE_SYSTEM_PROMPT,
+};

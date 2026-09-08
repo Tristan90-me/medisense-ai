@@ -1,5 +1,8 @@
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
-import { Shield, LayoutDashboard, Users, Activity, Settings, LogOut } from 'lucide-react';
+import {
+  Shield, LayoutDashboard, Users, Activity, Settings, LogOut,
+  FileBarChart, SlidersHorizontal, ShieldAlert, ScrollText, Megaphone,
+} from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { cn } from '@/lib/utils';
 
@@ -7,6 +10,11 @@ const NAV_ITEMS = [
   { label: 'Dashboard', to: '/admin', icon: LayoutDashboard, end: true },
   { label: 'Users', to: '/admin/users', icon: Users },
   { label: 'Sessions', to: '/admin/sessions', icon: Activity },
+  { label: 'Flagged', to: '/admin/flagged', icon: ShieldAlert },
+  { label: 'Reports', to: '/admin/reports', icon: FileBarChart },
+  { label: 'Announcements', to: '/admin/announcements', icon: Megaphone },
+  { label: 'System Settings', to: '/admin/system-settings', icon: SlidersHorizontal },
+  { label: 'Audit Log', to: '/admin/audit-log', icon: ScrollText },
   { label: 'Settings', to: '/admin/settings', icon: Settings },
 ];
 

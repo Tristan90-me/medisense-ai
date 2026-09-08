@@ -58,6 +58,7 @@ export default function HealthScoreAchievements() {
         <button
           onClick={() => navigate('/dashboard')}
           className="flex rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"
+          aria-label="Go back"
         >
           <ArrowLeft size={18} />
         </button>
@@ -94,7 +95,7 @@ export default function HealthScoreAchievements() {
                   <span className="text-base font-medium text-muted-foreground">/100</span>
                 </p>
               </div>
-              <Progress value={score} />
+              <Progress value={score} aria-label={`Overall health score: ${score} out of 100`} />
             </div>
 
             {/* Breakdown */}
@@ -109,7 +110,11 @@ export default function HealthScoreAchievements() {
                         <span className="text-muted-foreground">{item.label}</span>
                         <span className="font-medium text-foreground">{value}/{item.max}</span>
                       </div>
-                      <Progress value={(value / item.max) * 100} className="h-1.5" />
+                      <Progress
+                        value={(value / item.max) * 100}
+                        className="h-1.5"
+                        aria-label={`${item.label}: ${value} out of ${item.max}`}
+                      />
                     </div>
                   );
                 })}
@@ -127,13 +132,13 @@ export default function HealthScoreAchievements() {
                       key={a.id}
                       className={cn(
                         'relative flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left',
-                        unlocked ? 'border-border bg-background' : 'border-border/60 bg-muted/40 opacity-60'
+                        unlocked ? 'border-border bg-background' : 'border-border/60 bg-muted/40'
                       )}
                     >
                       {!unlocked && (
                         <Lock size={13} className="absolute right-2.5 top-2.5 text-muted-foreground" />
                       )}
-                      <span className="text-2xl">{a.icon}</span>
+                      <span className={cn('text-2xl', !unlocked && 'opacity-50')}>{a.icon}</span>
                       <Badge variant={unlocked ? 'default' : 'outline'} className="text-[10px]">
                         {a.title}
                       </Badge>

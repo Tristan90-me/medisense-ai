@@ -65,6 +65,28 @@ const sessionSchema = new mongoose.Schema(
     // output did not — a same-turn safety-net disagreement worth a human
     // reviewing, not just any difference in the two scores.
     severityMismatch: { type: Boolean, default: false },
+    // Moderation queue flag — set true (and never automatically cleared)
+    // whenever the LLM itself declares an emergency OR the independent
+    // rule-based triage layer disagrees with it (severityMismatch). See
+    // controllers/aiController.js for where this gets set, and
+    // controllers/adminController.js's reviewSession for how it gets
+    // acknowledged (reviewedAt/reviewedBy/reviewNotes) without ever flipping
+    // flaggedForReview back to false — it stays a permanent record that this
+    // session once needed a human look.
+    flaggedForReview: { type: Boolean, default: false },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedAt: { type: Date, default: null },
+    reviewNotes: { type: String, default: '' },
+    // Third independent signal (Phase 9) alongside the LLM's own severity
+    // (utils/gemini.js) and the rule-based triage layer (utils/triage.js) —
+    // a locally-run Naive Bayes classifier, see ml/symptomClassifier.js.
+    // condition is null when too few recognized symptoms exist to predict
+    // anything meaningful (see that file's matchedCount guard).
+    mlClassification: {
+      condition: { type: String, default: null },
+      confidence: { type: Number, default: 0 },
+      topPredictions: [{ condition: String, probability: Number, _id: false }],
+    },
     summary: String,
   },
   { timestamps: true }

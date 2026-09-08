@@ -139,6 +139,7 @@ export default function HealthStats() {
         <button
           className="flex rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => navigate('/dashboard')}
+          aria-label="Go back"
         >
           <ArrowLeft size={18} />
         </button>
@@ -209,7 +210,7 @@ export default function HealthStats() {
                 <CardContent className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center text-[13px] text-muted-foreground">
                   <Activity size={28} className="text-muted-foreground/40" />
                   <p>Not enough data yet for a chart.</p>
-                  <p className="text-xs text-muted-foreground/70">Complete at least 2 sessions with severity scores.</p>
+                  <p className="text-xs text-muted-foreground">Complete at least 2 sessions with severity scores.</p>
                 </CardContent>
               </Card>
             )}
@@ -254,7 +255,7 @@ export default function HealthStats() {
               </div>
             )}
 
-            <p className="pb-5 text-center text-[11px] leading-relaxed text-muted-foreground/70">
+            <p className="pb-5 text-center text-[11px] leading-relaxed text-muted-foreground">
               MediSense AI is not a substitute for professional medical advice.
               Always consult a qualified healthcare provider.
             </p>

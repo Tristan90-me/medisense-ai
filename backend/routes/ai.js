@@ -41,10 +41,12 @@ router.post('/session/start', protect, validate(startSessionRules), startSession
  *     description: >
  *       Returns the full AI reply in one response, with bracket-tagged metadata
  *       ([EMERGENCY], [SEVERITY], [SYMPTOMS], [DIAGNOSIS], [SUGGESTIONS]) parsed
- *       out into structured fields, plus an independent rule-based triage
- *       cross-check (`ruleBasedTriage`/`severityMismatch`) computed server-side
- *       from the session's extracted symptoms — never derived from the LLM's
- *       own output, so it can catch a severity call the LLM under-calls.
+ *       out into structured fields, plus two independent server-side signals
+ *       computed from the session's extracted symptoms — never derived from
+ *       the LLM's own output: a rule-based triage cross-check
+ *       (`ruleBasedTriage`/`severityMismatch`, Phase 3) and a locally-run
+ *       Naive Bayes classifier (`mlClassification`, Phase 9 — no external ML
+ *       service, pure in-process inference).
  *       See /ai/session/message/stream for the SSE equivalent.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -82,6 +84,19 @@ router.post('/session/start', protect, validate(startSessionRules), startSession
  *                 severityMismatch:
  *                   type: boolean
  *                   description: True only when the rule-based check found a Critical red flag that the LLM's own severity/emergency output did not reflect — the moderation auto-flag trigger.
+ *                 mlClassification:
+ *                   type: object
+ *                   description: Locally-run Naive Bayes prediction over the session's extracted symptoms — a third independent signal alongside severity and ruleBasedTriage. condition is null when too few recognized symptoms exist yet to predict anything meaningful.
+ *                   properties:
+ *                     condition: { type: string, nullable: true }
+ *                     confidence: { type: number, description: 0-1, the top prediction's own probability. }
+ *                     topPredictions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           condition: { type: string }
+ *                           probability: { type: number }
  *       400: { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
  *       404: { description: Session not found or not owned by this user }
  */
@@ -110,7 +125,7 @@ router.post('/session/message', protect, validate(sendMessageRules), sendMessage
  *               sessionId: { type: string }
  *               message: { type: string, maxLength: 4000 }
  *     responses:
- *       200: { description: "text/event-stream of reply chunks, terminated by a `done` event carrying the same fields as /ai/session/message's 200 response (including ruleBasedTriage/severityMismatch)", content: { text/event-stream: {} } }
+ *       200: { description: "text/event-stream of reply chunks, terminated by a `done` event carrying the same fields as /ai/session/message's 200 response (including ruleBasedTriage/severityMismatch/mlClassification)", content: { text/event-stream: {} } }
  *       400: { description: Validation error }
  *       404: { description: Session not found or not owned by this user }
  */

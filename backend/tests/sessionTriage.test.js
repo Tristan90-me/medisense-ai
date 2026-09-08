@@ -15,6 +15,7 @@ const app = require('../app');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Session = require('../models/Session');
+const SystemSetting = require('../models/SystemSetting');
 const { chat, chatStream } = require('../utils/gemini');
 
 async function createUser(overrides = {}) {
@@ -160,5 +161,63 @@ describe('sendMessage: rule-based triage wiring', () => {
     expect(done.ruleBasedTriage.level).toBe('Critical');
     expect(done.ruleBasedTriage.matchedRules).toContain('loss_of_consciousness');
     expect(done.severityMismatch).toBe(true);
+  });
+});
+
+describe('sendMessage: admin-configured emergencyKeywords SystemSetting is passed through to triage', () => {
+  beforeEach(() => { chat.mockReset(); });
+
+  test('a saved custom keyword matching an extracted symptom triggers a custom:-prefixed matchedRules entry', async () => {
+    await SystemSetting.create({ key: 'emergencyKeywords', value: ['funny taste in mouth'] });
+
+    const user = await createUser();
+    const token = tokenFor(user);
+    const sessionId = await startSession(token);
+
+    // No built-in rule matches this phrase — only the admin-configured
+    // custom keyword should trigger it.
+    chat.mockResolvedValue({
+      text: 'Noted.',
+      emergency: false,
+      severity: { score: 2, level: 'Low', reason: 'n/a' },
+      symptoms: { symptoms: ['funny taste in mouth'], duration: '10 minutes', onset: 'sudden' },
+      diagnosis: null,
+      suggestions: [],
+    });
+
+    const res = await request(app)
+      .post('/api/ai/session/message')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sessionId, message: 'I have a funny taste in mouth' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ruleBasedTriage.level).toBe('Critical');
+    expect(res.body.ruleBasedTriage.matchedRules).toContain('custom:funny taste in mouth');
+
+    const saved = await Session.findById(sessionId);
+    expect(saved.ruleBasedTriage.matchedRules).toContain('custom:funny taste in mouth');
+  });
+
+  test('no emergencyKeywords setting saved behaves exactly as before (empty extraKeywords)', async () => {
+    const user = await createUser();
+    const token = tokenFor(user);
+    const sessionId = await startSession(token);
+
+    chat.mockResolvedValue({
+      text: 'Sounds mild.',
+      emergency: false,
+      severity: { score: 2, level: 'Low', reason: 'n/a' },
+      symptoms: { symptoms: ['funny taste in mouth'], duration: '10 minutes', onset: 'sudden' },
+      diagnosis: null,
+      suggestions: [],
+    });
+
+    const res = await request(app)
+      .post('/api/ai/session/message')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sessionId, message: 'I have a funny taste in mouth' });
+
+    expect(res.body.ruleBasedTriage.level).toBe('Low');
+    expect(res.body.ruleBasedTriage.matchedRules).toEqual([]);
   });
 });

@@ -88,6 +88,10 @@ exports.resendVerification = async (req, res) => {
 };
 
 // ── Login (step 1 — send OTP) ─────────────────────────────
+// Mirrors adminLogin's symmetric check: an admin account must not be able to
+// authenticate through the consumer flow, and a correct-password-but-admin
+// account gets the identical generic message a wrong password would — never
+// reveal that the email belongs to an admin.
 exports.login = async (req, res) => {
   try {
     const { email, password, deviceToken } = req.body;
@@ -95,7 +99,7 @@ exports.login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password required' });
 
     const user = await User.findOne({ email });
-    if (!user || !(await user.matchPassword(password)))
+    if (!user || !(await user.matchPassword(password)) || user.role === 'admin')
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
     if (!user.isEmailVerified)
@@ -140,7 +144,7 @@ exports.resendOtp = async (req, res) => {
     if (!email)
       return res.status(400).json({ success: false, message: 'Email is required' });
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email, role: 'user' });
     if (user && user.loginOtp && user.loginOtpExpires > Date.now()) {
       const otp = user.generateOtp();
       await user.save({ validateBeforeSave: false });
@@ -164,7 +168,11 @@ exports.verifyOtp = async (req, res) => {
     if (!email || !otp)
       return res.status(400).json({ success: false, message: 'Email and OTP are required' });
 
-    const user = await User.findOne({ email });
+    // role: 'user' scoping is defense-in-depth, matching adminVerifyOtp's own
+    // re-check of role at token issuance — an admin account should never
+    // reach step 1 (login rejects it before an OTP is ever generated), but
+    // this ensures a token can't be minted for one here either way.
+    const user = await User.findOne({ email, role: 'user' });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     if (user.loginOtpAttempts >= 5)

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -7,33 +8,56 @@ import { SessionProvider } from './context/SessionContext';
 import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 import AIAssistant from './components/AIAssistant/AIAssistant';
 import FloatingMenu from './components/FloatingMenu';
-import Landing from './pages/Landing';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Onboarding from './pages/Onboarding';
-import Dashboard from './pages/Dashboard';
-import SessionChat from './pages/SessionChat';
-import BodyMapPage from './pages/BodyMapPage';
-import History from './pages/History';
-import SessionDetail from './pages/SessionDetail';
-import HealthStats from './pages/HealthStats';
-import Dependents from './pages/Dependents';
-import AccountSettings from './pages/AccountSettings';
-import EmergencyContacts from './pages/EmergencyContacts';
-import Medications from './pages/Medications';
-import HealthScoreAchievements from './pages/HealthScoreAchievements';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallPrompt from './components/InstallPrompt';
-import VerifyEmail from './pages/VerifyEmail';
-import VerifyOtp from './pages/VerifyOtp';
-import AdminLayout from './components/admin/AdminLayout';
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminVerifyOtp from './pages/admin/AdminVerifyOtp';
-import AcceptAdminInvite from './pages/admin/AcceptAdminInvite';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminSessions from './pages/admin/AdminSessions';
-import AdminSettings from './pages/admin/AdminSettings';
+
+// Landing is the very first thing an unauthenticated visitor sees, so it
+// stays in the main bundle (no waterfall: import -> render). Every other
+// route is lazy — each becomes its own chunk, so a consumer never downloads
+// admin code (and vice versa) and heavy per-page deps (recharts, Leaflet,
+// the body-map SVG) only load when that page is actually visited.
+import Landing from './pages/Landing';
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Onboarding = lazy(() => import('./pages/Onboarding'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const SessionChat = lazy(() => import('./pages/SessionChat'));
+const BodyMapPage = lazy(() => import('./pages/BodyMapPage'));
+const History = lazy(() => import('./pages/History'));
+const SessionDetail = lazy(() => import('./pages/SessionDetail'));
+const HealthStats = lazy(() => import('./pages/HealthStats'));
+const Dependents = lazy(() => import('./pages/Dependents'));
+const AccountSettings = lazy(() => import('./pages/AccountSettings'));
+const EmergencyContacts = lazy(() => import('./pages/EmergencyContacts'));
+const Medications = lazy(() => import('./pages/Medications'));
+const HealthScoreAchievements = lazy(() => import('./pages/HealthScoreAchievements'));
+const PhotoLog = lazy(() => import('./pages/PhotoLog'));
+const CareFinder = lazy(() => import('./pages/CareFinder'));
+const CommunityInsights = lazy(() => import('./pages/CommunityInsights'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const VerifyOtp = lazy(() => import('./pages/VerifyOtp'));
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
+const AdminVerifyOtp = lazy(() => import('./pages/admin/AdminVerifyOtp'));
+const AcceptAdminInvite = lazy(() => import('./pages/admin/AcceptAdminInvite'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminSessions = lazy(() => import('./pages/admin/AdminSessions'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
+const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'));
+const AdminFlaggedSessions = lazy(() => import('./pages/admin/AdminFlaggedSessions'));
+const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
+const AdminAnnouncements = lazy(() => import('./pages/admin/AdminAnnouncements'));
+
+// Shared fallback for lazy route chunks — matches PrivateRoute's existing
+// "Loading..." treatment below so a lazy-chunk fetch looks identical to an
+// auth check in progress, not a second, visually distinct spinner.
+const RouteFallback = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+    Loading...
+  </div>
+);
 
 // ─── Consumer route guards ──────────────────────────────────────────────────
 const PrivateRoute = ({ children }) => {
@@ -93,28 +117,33 @@ function ConsumerApp() {
       <AIProvider>
         <SessionProvider>
           <ErrorBoundary>
-            <AnimatePresence mode="wait">
-              <Routes location={location} key={location.pathname}>
-                <Route path="/" element={<PageTransition><Landing /></PageTransition>} />
-                <Route path="/login" element={<PublicRoute><PageTransition><Login /></PageTransition></PublicRoute>} />
-                <Route path="/register" element={<PublicRoute><PageTransition><Register /></PageTransition></PublicRoute>} />
-                <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
-                <Route path="/verify-otp" element={<PageTransition><VerifyOtp /></PageTransition>} />
-                <Route path="/onboarding" element={<PrivateRoute><PageTransition><Onboarding /></PageTransition></PrivateRoute>} />
-                <Route path="/dashboard" element={<PrivateRoute><PageTransition><Dashboard /></PageTransition></PrivateRoute>} />
-                <Route path="/session" element={<PrivateRoute><PageTransition><SessionChat /></PageTransition></PrivateRoute>} />
-                <Route path="/body-map" element={<PrivateRoute><PageTransition><BodyMapPage /></PageTransition></PrivateRoute>} />
-                <Route path="/history" element={<PrivateRoute><PageTransition><History /></PageTransition></PrivateRoute>} />
-                <Route path="/history/:id" element={<PrivateRoute><PageTransition><SessionDetail /></PageTransition></PrivateRoute>} />
-                <Route path="/health-stats" element={<PrivateRoute><PageTransition><HealthStats /></PageTransition></PrivateRoute>} />
-                <Route path="/dependents" element={<PrivateRoute><PageTransition><Dependents /></PageTransition></PrivateRoute>} />
-                <Route path="/account-settings" element={<PrivateRoute><PageTransition><AccountSettings /></PageTransition></PrivateRoute>} />
-                <Route path="/emergency-contacts" element={<PrivateRoute><PageTransition><EmergencyContacts /></PageTransition></PrivateRoute>} />
-                <Route path="/medications" element={<PrivateRoute><PageTransition><Medications /></PageTransition></PrivateRoute>} />
-                <Route path="/health-score" element={<PrivateRoute><PageTransition><HealthScoreAchievements /></PageTransition></PrivateRoute>} />
-                <Route path="*" element={<Navigate to="/" />} />
-              </Routes>
-            </AnimatePresence>
+            <Suspense fallback={<RouteFallback />}>
+              <AnimatePresence mode="wait">
+                <Routes location={location} key={location.pathname}>
+                  <Route path="/" element={<PageTransition><Landing /></PageTransition>} />
+                  <Route path="/login" element={<PublicRoute><PageTransition><Login /></PageTransition></PublicRoute>} />
+                  <Route path="/register" element={<PublicRoute><PageTransition><Register /></PageTransition></PublicRoute>} />
+                  <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
+                  <Route path="/verify-otp" element={<PageTransition><VerifyOtp /></PageTransition>} />
+                  <Route path="/onboarding" element={<PrivateRoute><PageTransition><Onboarding /></PageTransition></PrivateRoute>} />
+                  <Route path="/dashboard" element={<PrivateRoute><PageTransition><Dashboard /></PageTransition></PrivateRoute>} />
+                  <Route path="/session" element={<PrivateRoute><PageTransition><SessionChat /></PageTransition></PrivateRoute>} />
+                  <Route path="/body-map" element={<PrivateRoute><PageTransition><BodyMapPage /></PageTransition></PrivateRoute>} />
+                  <Route path="/history" element={<PrivateRoute><PageTransition><History /></PageTransition></PrivateRoute>} />
+                  <Route path="/history/:id" element={<PrivateRoute><PageTransition><SessionDetail /></PageTransition></PrivateRoute>} />
+                  <Route path="/health-stats" element={<PrivateRoute><PageTransition><HealthStats /></PageTransition></PrivateRoute>} />
+                  <Route path="/dependents" element={<PrivateRoute><PageTransition><Dependents /></PageTransition></PrivateRoute>} />
+                  <Route path="/account-settings" element={<PrivateRoute><PageTransition><AccountSettings /></PageTransition></PrivateRoute>} />
+                  <Route path="/emergency-contacts" element={<PrivateRoute><PageTransition><EmergencyContacts /></PageTransition></PrivateRoute>} />
+                  <Route path="/medications" element={<PrivateRoute><PageTransition><Medications /></PageTransition></PrivateRoute>} />
+                  <Route path="/health-score" element={<PrivateRoute><PageTransition><HealthScoreAchievements /></PageTransition></PrivateRoute>} />
+                  <Route path="/photo-log" element={<PrivateRoute><PageTransition><PhotoLog /></PageTransition></PrivateRoute>} />
+                  <Route path="/care-finder" element={<PrivateRoute><PageTransition><CareFinder /></PageTransition></PrivateRoute>} />
+                  <Route path="/community" element={<PrivateRoute><PageTransition><CommunityInsights /></PageTransition></PrivateRoute>} />
+                  <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
+              </AnimatePresence>
+            </Suspense>
             <AIAssistant />
             <FloatingMenu />
             <InstallPrompt />
@@ -133,18 +162,25 @@ function AdminApp() {
   return (
     <AdminAuthProvider>
       <ErrorBoundary>
-        <Routes>
-          <Route path="login" element={<AdminPublicRoute><AdminLogin /></AdminPublicRoute>} />
-          <Route path="verify-otp" element={<AdminVerifyOtp />} />
-          <Route path="accept-invite" element={<AcceptAdminInvite />} />
-          <Route element={<AdminPrivateRoute><AdminLayout /></AdminPrivateRoute>}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="sessions" element={<AdminSessions />} />
-            <Route path="settings" element={<AdminSettings />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/admin" />} />
-        </Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="login" element={<AdminPublicRoute><AdminLogin /></AdminPublicRoute>} />
+            <Route path="verify-otp" element={<AdminVerifyOtp />} />
+            <Route path="accept-invite" element={<AcceptAdminInvite />} />
+            <Route element={<AdminPrivateRoute><AdminLayout /></AdminPrivateRoute>}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="sessions" element={<AdminSessions />} />
+              <Route path="flagged" element={<AdminFlaggedSessions />} />
+              <Route path="reports" element={<AdminReports />} />
+              <Route path="announcements" element={<AdminAnnouncements />} />
+              <Route path="system-settings" element={<SystemSettings />} />
+              <Route path="audit-log" element={<AdminAuditLog />} />
+              <Route path="settings" element={<AdminSettings />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/admin" />} />
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
     </AdminAuthProvider>
   );

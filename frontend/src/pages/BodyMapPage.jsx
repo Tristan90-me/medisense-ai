@@ -71,6 +71,7 @@ export default function BodyMapPage() {
         <button
           className="flex rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted"
           onClick={() => navigate('/dashboard')}
+          aria-label="Go back"
         >
           <ArrowLeft size={18} />
         </button>

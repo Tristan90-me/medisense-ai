@@ -97,4 +97,40 @@ describe('computeTriageScore', () => {
       expect(() => computeTriageScore(sym('chest pain'), {})).not.toThrow();
     });
   });
+
+  describe('extraKeywords (admin-editable custom emergency keywords)', () => {
+    test('omitting extraKeywords behaves identically to before (regression-proof default)', () => {
+      const withDefault = computeTriageScore(sym('chest pain', 'shortness of breath'), null);
+      const withExplicitEmpty = computeTriageScore(sym('chest pain', 'shortness of breath'), null, []);
+      expect(withDefault).toEqual(withExplicitEmpty);
+
+      const lowWithDefault = computeTriageScore(sym('runny nose'), null);
+      const lowWithExplicitEmpty = computeTriageScore(sym('runny nose'), null, []);
+      expect(lowWithDefault).toEqual(lowWithExplicitEmpty);
+    });
+
+    test('a custom keyword with no built-in rule match still triggers Critical', () => {
+      const result = computeTriageScore(sym('funny taste in mouth'), null, ['funny taste in mouth']);
+      expect(result.level).toBe('Critical');
+      expect(result.score).toBe(10);
+    });
+
+    test('a matched custom keyword is recorded with the "custom:" prefix', () => {
+      const result = computeTriageScore(sym('funny taste in mouth'), null, ['funny taste in mouth']);
+      expect(result.matchedRules).toContain('custom:funny taste in mouth');
+    });
+
+    test('a custom keyword that does not appear in the symptom text does not match', () => {
+      const result = computeTriageScore(sym('runny nose'), null, ['funny taste in mouth']);
+      expect(result.level).toBe('Low');
+      expect(result.matchedRules).toEqual([]);
+    });
+
+    test('custom keywords combine with built-in rule matches in the same result', () => {
+      const result = computeTriageScore(sym('chest pain', 'shortness of breath'), null, ['funny taste in mouth']);
+      expect(result.matchedRules).toContain('chest_pain_cardiac');
+      // Only recorded if it actually appears in the text — it doesn't here.
+      expect(result.matchedRules).not.toContain('custom:funny taste in mouth');
+    });
+  });
 });

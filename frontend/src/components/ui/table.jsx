@@ -6,8 +6,12 @@ function Table({
   className,
   ...props
 }) {
+  // tabIndex makes this reachable/scrollable via keyboard when its content
+  // overflows horizontally — an axe-core "scrollable-region-focusable"
+  // finding otherwise, since a mouse-only user could scroll it but a
+  // keyboard-only user had no way to reach the hidden columns.
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div data-slot="table-container" className="relative w-full overflow-x-auto" tabIndex={0}>
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}

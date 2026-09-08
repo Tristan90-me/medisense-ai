@@ -3,14 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import { listAnnouncements } from '../api/announcements.api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Activity, Map, Zap, ClipboardList,
   LogOut, History, TrendingUp,
-  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, PhoneCall, Settings, Pill, Trophy,
+  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, Users2, PhoneCall, Settings, Pill, Trophy, Camera, MapPin, Bell, Megaphone,
 } from 'lucide-react';
+
+// localStorage key tracking the newest announcement (by sentAt) the user has
+// viewed — deliberately a lightweight MVP simplification (no push/read-receipt
+// backend infrastructure for this phase) rather than an oversight; see
+// Phase 8 plan for "in-app only" announcements.
+const LAST_SEEN_ANNOUNCEMENT_KEY = 'medisense-last-seen-announcement';
+
+const formatAnnouncementDate = (dateStr) => new Date(dateStr).toLocaleString('en-GB', {
+  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+});
 
 const colorClasses = {
   primary: 'bg-primary/10 text-primary',
@@ -60,6 +75,10 @@ export default function Dashboard() {
   const [profile, setProfile] = useState(null);
   const [snapshotLoading, setSnapshotLoading] = useState(true);
 
+  const [announcements, setAnnouncements] = useState([]);
+  const [hasUnreadAnnouncement, setHasUnreadAnnouncement] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -80,6 +99,34 @@ export default function Dashboard() {
     })();
     return () => { ignore = true; };
   }, []);
+
+  // Single fetch on mount — no polling. "In-app only" per the Phase 8 plan
+  // means a fresh fetch on each dashboard load is sufficient; no push/
+  // real-time updates are needed.
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const data = await listAnnouncements();
+        if (ignore) return;
+        setAnnouncements(data);
+        const lastSeen = localStorage.getItem(LAST_SEEN_ANNOUNCEMENT_KEY);
+        const newest = data[0]?.sentAt;
+        setHasUnreadAnnouncement(!!newest && newest !== lastSeen);
+      } catch {
+        // Non-critical — the bell just won't show a badge/list this load.
+      }
+    })();
+    return () => { ignore = true; };
+  }, []);
+
+  const openNotifications = () => {
+    setNotificationsOpen(true);
+    setHasUnreadAnnouncement(false);
+    if (announcements[0]?.sentAt) {
+      localStorage.setItem(LAST_SEEN_ANNOUNCEMENT_KEY, announcements[0].sentAt);
+    }
+  };
 
   // ── Snapshot derivations ─────────────────────────────────────────────
   const latestSession = sessions[0] ?? null;
@@ -162,6 +209,27 @@ export default function Dashboard() {
       desc: 'Your wellness score & achievements',
       onClick: () => navigate('/health-score'),
     },
+    {
+      icon: Camera,
+      color: 'secondary',
+      title: 'Photo Log',
+      desc: 'Track symptom photos over time',
+      onClick: () => navigate('/photo-log'),
+    },
+    {
+      icon: MapPin,
+      color: 'accent',
+      title: 'Care Finder',
+      desc: 'Nearby hospitals, clinics & pharmacies',
+      onClick: () => navigate('/care-finder'),
+    },
+    {
+      icon: Users2,
+      color: 'primary',
+      title: 'Community Insights',
+      desc: 'Anonymized symptom & severity trends',
+      onClick: () => navigate('/community'),
+    },
   ];
 
   return (
@@ -177,12 +245,24 @@ export default function Dashboard() {
             <p className="text-[11px] text-muted-foreground">Health Dashboard</p>
           </div>
         </div>
-        <button
-          onClick={logout}
-          className="flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <LogOut size={15} /> Logout
-        </button>
+        <div className="flex items-center gap-3.5">
+          <button
+            onClick={openNotifications}
+            className="relative flex text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Notifications"
+          >
+            <Bell size={17} />
+            {hasUnreadAnnouncement && (
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-severity-high-fg" />
+            )}
+          </button>
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <LogOut size={15} /> Logout
+          </button>
+        </div>
       </header>
 
       <div className="mx-auto max-w-[600px] px-4 py-6">
@@ -377,11 +457,39 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
-        <p className="text-center text-[11px] leading-relaxed text-muted-foreground/70">
+        <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
           MediSense AI is not a substitute for professional medical advice.
           Always consult a qualified healthcare provider.
         </p>
       </div>
+
+      {/* Notification center */}
+      <Dialog open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone size={16} className="text-primary" /> Announcements
+            </DialogTitle>
+          </DialogHeader>
+          {announcements.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No announcements yet.</p>
+          ) : (
+            <ScrollArea className="max-h-[360px] pr-3">
+              <div className="flex flex-col gap-3">
+                {announcements.map((a) => (
+                  <div key={a._id} className="rounded-xl border border-border/70 p-3.5">
+                    <p className="text-sm font-semibold text-foreground">{a.title}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                      {a.body}
+                    </p>
+                    <p className="mt-2 text-[10px] text-muted-foreground">{formatAnnouncementDate(a.sentAt)}</p>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

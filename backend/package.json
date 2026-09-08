@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "create-admin": "node scripts/createFirstAdmin.js",
     "migrate:healthprofile-index": "node scripts/migrateHealthProfileIndex.js",
+    "train-ml": "node ml/train.js",
     "test": "jest",
     "test:watch": "jest --watch"
   },
@@ -23,9 +24,11 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-validator": "^7.3.2",
+    "fast-csv": "^5.0.7",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.4",
+    "multer": "^2.3.0",
     "nodemailer": "^9.0.3",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"

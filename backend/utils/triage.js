@@ -81,9 +81,16 @@ const CARDIAC_RISK_TERMS = ['heart disease', 'cardiac', 'hypertension', 'high bl
  *
  * @param {Array<{name: string}>} symptoms - Session.symptoms
  * @param {object|null} healthProfile - used only as a risk-adjustment factor
+ * @param {string[]} [extraKeywords] - admin-supplied keyword strings (see
+ *   models/SystemSetting.js's 'emergencyKeywords' key) checked as plain
+ *   case-insensitive substring matches against the same symptom text as the
+ *   built-in rules. Deliberately a plain array, NOT a DB lookup done here —
+ *   this function stays pure/DB-free; the caller (controllers/aiController.js)
+ *   is responsible for loading the setting and passing its value in. Default
+ *   `[]` preserves 100% of prior behavior when omitted.
  * @returns {{level: 'Low'|'Critical', score: number, matchedRules: string[]}}
  */
-const computeTriageScore = (symptoms = [], healthProfile = null) => {
+const computeTriageScore = (symptoms = [], healthProfile = null, extraKeywords = []) => {
   const text = symptoms.map((s) => (s?.name || '').toLowerCase()).join(' | ');
   const matchedRules = TRIAGE_RULES.filter((rule) => rule.match(text)).map((rule) => rule.id);
 
@@ -96,6 +103,15 @@ const computeTriageScore = (symptoms = [], healthProfile = null) => {
   if (hasCardiacHistory && text.includes('chest pain') && !matchedRules.includes('chest_pain_cardiac')) {
     matchedRules.push('chest_pain_cardiac_risk_factor');
   }
+
+  // Admin-editable custom keywords — same substring-match approach as the
+  // hardcoded rules above, just data-driven instead of code-driven.
+  (extraKeywords || []).forEach((keyword) => {
+    const normalized = (keyword || '').toLowerCase().trim();
+    if (normalized && text.includes(normalized)) {
+      matchedRules.push(`custom:${keyword}`);
+    }
+  });
 
   if (matchedRules.length > 0) {
     return { level: 'Critical', score: 10, matchedRules };

@@ -61,6 +61,7 @@ export default function History() {
         <button
           onClick={() => navigate('/dashboard')}
           className="flex rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"
+          aria-label="Go back"
         >
           <ArrowLeft size={18} />
         </button>

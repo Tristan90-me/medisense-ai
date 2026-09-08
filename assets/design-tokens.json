@@ -37,12 +37,14 @@
       "green": {
         "50": { "$value": "#F0FDF4", "$type": "color" },
         "500": { "$value": "#22C55E", "$type": "color" },
-        "600": { "$value": "#16A34A", "$type": "color" }
+        "600": { "$value": "#16A34A", "$type": "color" },
+        "700": { "$value": "#117E39", "$type": "color" }
       },
       "amber": {
         "50": { "$value": "#FFFBEB", "$type": "color" },
         "500": { "$value": "#F59E0B", "$type": "color" },
-        "600": { "$value": "#D97706", "$type": "color" }
+        "600": { "$value": "#D97706", "$type": "color" },
+        "700": { "$value": "#A45904", "$type": "color" }
       },
       "red": {
         "50": { "$value": "#FEF2F2", "$type": "color" },
@@ -119,14 +121,14 @@
       "foreground": { "$value": "{primitive.color.slate.950}", "$type": "color" },
       "card": { "$value": "{primitive.color.white}", "$type": "color" },
       "card-foreground": { "$value": "{primitive.color.slate.950}", "$type": "color" },
-      "primary": { "$value": "{primitive.color.blue.500}", "$type": "color" },
-      "primary-hover": { "$value": "{primitive.color.blue.600}", "$type": "color" },
-      "primary-active": { "$value": "{primitive.color.blue.700}", "$type": "color" },
+      "primary": { "$value": "{primitive.color.blue.600}", "$type": "color" },
+      "primary-hover": { "$value": "{primitive.color.blue.700}", "$type": "color" },
+      "primary-active": { "$value": "{primitive.color.blue.800}", "$type": "color" },
       "primary-foreground": { "$value": "{primitive.color.white}", "$type": "color" },
       "secondary": { "$value": "{primitive.color.violet.500}", "$type": "color" },
       "secondary-foreground": { "$value": "{primitive.color.white}", "$type": "color" },
       "muted": { "$value": "{primitive.color.slate.100}", "$type": "color" },
-      "muted-foreground": { "$value": "{primitive.color.slate.500}", "$type": "color" },
+      "muted-foreground": { "$value": "{primitive.color.slate.600}", "$type": "color" },
       "accent": { "$value": "{primitive.color.emerald.500}", "$type": "color" },
       "accent-foreground": { "$value": "{primitive.color.white}", "$type": "color" },
       "destructive": { "$value": "{primitive.color.red.600}", "$type": "color" },
@@ -136,13 +138,13 @@
       "ring": { "$value": "{primitive.color.blue.500}", "$type": "color" },
       "severity-low": { "$value": "{primitive.color.green.500}", "$type": "color" },
       "severity-low-bg": { "$value": "{primitive.color.green.50}", "$type": "color" },
-      "severity-low-fg": { "$value": "{primitive.color.green.600}", "$type": "color" },
+      "severity-low-fg": { "$value": "{primitive.color.green.700}", "$type": "color" },
       "severity-moderate": { "$value": "{primitive.color.amber.500}", "$type": "color" },
       "severity-moderate-bg": { "$value": "{primitive.color.amber.50}", "$type": "color" },
-      "severity-moderate-fg": { "$value": "{primitive.color.amber.600}", "$type": "color" },
+      "severity-moderate-fg": { "$value": "{primitive.color.amber.700}", "$type": "color" },
       "severity-high": { "$value": "{primitive.color.red.500}", "$type": "color" },
       "severity-high-bg": { "$value": "{primitive.color.red.50}", "$type": "color" },
-      "severity-high-fg": { "$value": "{primitive.color.red.600}", "$type": "color" },
+      "severity-high-fg": { "$value": "{primitive.color.red.700}", "$type": "color" },
       "severity-critical": { "$value": "{primitive.color.violet.500}", "$type": "color" },
       "severity-critical-bg": { "$value": "{primitive.color.violet.50}", "$type": "color" },
       "severity-critical-fg": { "$value": "{primitive.color.violet.600}", "$type": "color" }
@@ -203,9 +205,9 @@
         "muted-foreground": { "$value": "{primitive.color.slate.400}", "$type": "color" },
         "border": { "$value": "{primitive.color.slate.800}", "$type": "color" },
         "input": { "$value": "{primitive.color.slate.800}", "$type": "color" },
-        "severity-low-bg": { "$value": "{primitive.color.green.600}", "$type": "color" },
-        "severity-moderate-bg": { "$value": "{primitive.color.amber.600}", "$type": "color" },
-        "severity-high-bg": { "$value": "{primitive.color.red.600}", "$type": "color" },
+        "severity-low-bg": { "$value": "{primitive.color.green.700}", "$type": "color" },
+        "severity-moderate-bg": { "$value": "{primitive.color.amber.700}", "$type": "color" },
+        "severity-high-bg": { "$value": "{primitive.color.red.700}", "$type": "color" },
         "severity-critical-bg": { "$value": "{primitive.color.violet.600}", "$type": "color" }
       }
     }

@@ -7,14 +7,19 @@ import useVoice from '../hooks/useVoice';
 import api from '../api/axios';
 import { streamSessionMessage } from '../api/stream';
 import { listEmergencyContacts } from '../api/emergencyContacts.api';
+import { linkPhotoSession } from '../api/photoLog.api';
 import SessionSummary from '../components/SessionSummary';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert,
+  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert, MapPin, Cpu,
 } from 'lucide-react';
+
+// seekCareUrgency levels that warrant an in-person-care nudge — self-care
+// and monitor don't need it.
+const CARE_FINDER_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 
 const SEVERITY_CLASSES = {
   Low: 'bg-severity-low-bg text-severity-low-fg',
@@ -31,6 +36,7 @@ export default function SessionChat() {
   const mode = searchParams.get('mode') || 'quick';
   const preloadedSymptoms = searchParams.get('symptoms');
   const dependentId = searchParams.get('dependent');
+  const photoId = searchParams.get('photoId');
 
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -40,6 +46,7 @@ export default function SessionChat() {
   const [severity, setSeverity] = useState(null);
   const [ruleBasedTriage, setRuleBasedTriage] = useState(null);
   const [severityMismatch, setSeverityMismatch] = useState(false);
+  const [mlClassification, setMlClassification] = useState(null);
   const [diagnosis, setDiagnosis] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [emergency, setEmergency] = useState(false);
@@ -51,6 +58,7 @@ export default function SessionChat() {
   const inputRef = useRef(null);
   const streamingIndexRef = useRef(null);
   const contactsFetchedRef = useRef(false);
+  const initRanRef = useRef(false);
 
   const voice = useVoice();
 
@@ -77,6 +85,14 @@ export default function SessionChat() {
   }, [emergency]);
 
   useEffect(() => {
+    // Guards against React StrictMode's intentional dev-only double-invoke
+    // of effects — without this, local development double-fires the
+    // session-start POST (and, worse, the preloaded-symptom auto-send),
+    // since this effect has real side effects and nothing to meaningfully
+    // cancel/clean up on the simulated unmount between the two invocations.
+    if (initRanRef.current) return;
+    initRanRef.current = true;
+
     const init = async () => {
       try {
         const res = await api.post('/ai/session/start', { mode, dependentId: dependentId || undefined });
@@ -84,11 +100,15 @@ export default function SessionChat() {
         setSession(s);
         setActiveSession(s);
 
+        // Best-effort — a failure here shouldn't block the chat itself.
+        if (photoId) linkPhotoSession(photoId, s._id).catch(() => {});
+
         if (res.data.resumed && s.messages?.length) {
           setMessages(s.messages);
           if (s.severityScore) setSeverity({ score: s.severityScore, level: s.severityLevel });
           if (s.ruleBasedTriage?.level) setRuleBasedTriage(s.ruleBasedTriage);
           if (s.severityMismatch) setSeverityMismatch(true);
+          if (s.mlClassification?.condition) setMlClassification(s.mlClassification);
           if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
           if (s.emergencyDetected) setEmergency(true);
         } else {
@@ -103,7 +123,7 @@ export default function SessionChat() {
 
           if (preloadedSymptoms && s) {
             setTimeout(() => {
-              sendMessage(preloadedSymptoms);
+              sendMessage(preloadedSymptoms, s);
             }, 800);
           }
         }
@@ -116,9 +136,16 @@ export default function SessionChat() {
     init();
   }, []);
 
-  const sendMessage = async (text) => {
+  // sessionOverride exists for the auto-send-on-mount path below: the
+  // setTimeout there fires from the initial-render closure of this function,
+  // whose `session` state was still null at that point (state updates from
+  // the same effect don't retroactively change an already-captured closure).
+  // Passing the freshly-fetched session directly sidesteps that stale value
+  // instead of relying on the (stale) component state.
+  const sendMessage = async (text, sessionOverride) => {
+    const activeSession = sessionOverride || session;
     const content = (text || input).trim();
-    if (!content || loading || !session) return;
+    if (!content || loading || !activeSession) return;
 
     setInput('');
     voice.clearTranscript();
@@ -131,7 +158,7 @@ export default function SessionChat() {
     let firstChunk = true;
 
     await streamSessionMessage({
-      sessionId: session._id,
+      sessionId: activeSession._id,
       message: content,
       onChunk: (delta) => {
         if (firstChunk) {
@@ -152,10 +179,23 @@ export default function SessionChat() {
       },
       onDone: (event) => {
         setLoading(false);
+        // The streamed chunks are the raw, un-stripped AI text — bracket
+        // tags like [SYMPTOMS:...]/[SUGGESTIONS:...] can't be removed
+        // mid-stream since they may split across chunk boundaries. Replace
+        // the bubble's content with the server's fully parsed, tag-free
+        // version now that the stream has finished, instead of leaving the
+        // raw accumulated text on screen.
+        setMessages((prev) => {
+          const next = [...prev];
+          const i = streamingIndexRef.current;
+          if (next[i]) next[i] = { ...next[i], content: event.message };
+          return next;
+        });
         if (event.emergency) setEmergency(true);
         if (event.severity) setSeverity(event.severity);
         if (event.ruleBasedTriage?.level) setRuleBasedTriage(event.ruleBasedTriage);
         if (event.severityMismatch) setSeverityMismatch(true);
+        if (event.mlClassification?.condition) setMlClassification(event.mlClassification);
         if (event.diagnosis) setDiagnosis(event.diagnosis);
         if (event.suggestions?.length) setSuggestions(event.suggestions);
         if (event.sessionStatus === 'completed') {
@@ -268,7 +308,7 @@ export default function SessionChat() {
 
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} aria-label="Go back">
           <ArrowLeft size={18} />
         </Button>
         <div className="flex flex-1 items-center gap-2.5">
@@ -311,6 +351,7 @@ export default function SessionChat() {
             size="icon"
             onClick={voice.toggleVoice}
             title={voice.voiceEnabled ? 'Mute AI voice' : 'Enable AI voice'}
+            aria-label={voice.voiceEnabled ? 'Mute AI voice' : 'Enable AI voice'}
           >
             {voice.voiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </Button>
@@ -377,6 +418,41 @@ export default function SessionChat() {
           </div>
         )}
 
+        {mlClassification?.condition && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-border bg-card p-4"
+          >
+            <div className="mb-2 flex items-center gap-1.5">
+              <Cpu size={14} className="text-secondary" />
+              <p className="text-sm font-bold text-foreground">ML Symptom Classifier</p>
+            </div>
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              A locally-run statistical model's independent read on your reported symptoms —
+              a separate signal from the AI conversation above, for comparison.
+            </p>
+            <div className="space-y-3">
+              {mlClassification.topPredictions?.slice(0, 3).map((p, i) => (
+                <div key={i}>
+                  <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
+                    <span>{p.condition}</span>
+                    <span>{Math.round(p.probability * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${p.probability * 100}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                      className="h-full rounded-full bg-secondary"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {diagnosis && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -387,6 +463,14 @@ export default function SessionChat() {
             <p className="mb-3 text-xs text-muted-foreground">
               Care needed: <strong className="capitalize text-foreground">{diagnosis.seekCareUrgency?.replace('-', ' ')}</strong>
             </p>
+            {CARE_FINDER_URGENCIES.includes(diagnosis.seekCareUrgency) && (
+              <button
+                onClick={() => navigate('/care-finder')}
+                className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                <MapPin size={13} /> Find nearby care
+              </button>
+            )}
             <div className="space-y-3">
               {diagnosis.conditions?.slice(0, 3).map((c, i) => (
                 <div key={i}>
@@ -459,6 +543,7 @@ export default function SessionChat() {
               onClick={handleMic}
               disabled={voice.isSpeaking}
               title={voice.isListening ? 'Stop recording' : 'Start voice input'}
+              aria-label={voice.isListening ? 'Stop recording' : 'Start voice input'}
             >
               {voice.isListening ? <MicOff size={18} /> : <Mic size={18} />}
             </Button>
@@ -472,7 +557,7 @@ export default function SessionChat() {
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
             disabled={loading}
           />
-          <Button size="icon" onClick={() => sendMessage()} disabled={!input.trim() || loading} className="rounded-full">
+          <Button size="icon" onClick={() => sendMessage()} disabled={!input.trim() || loading} className="rounded-full" aria-label="Send message">
             <Send size={16} />
           </Button>
         </div>

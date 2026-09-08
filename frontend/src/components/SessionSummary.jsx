@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Printer, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Printer, Activity, MapPin } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+// seekCareUrgency levels that warrant an in-person-care nudge — self-care
+// and monitor don't need it.
+const CARE_FINDER_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg' },
@@ -67,6 +72,7 @@ function PrintableSummary({ ref, session, summary, severity, diagnosis }) {
 }
 
 export default function SessionSummary({ session, messages, severity, diagnosis, onClose }) {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(true);
   const printRef = useRef(null);
@@ -175,6 +181,14 @@ export default function SessionSummary({ session, messages, severity, diagnosis,
                   </strong>
                 </p>
               )}
+              {CARE_FINDER_URGENCIES.includes(diagnosis.seekCareUrgency) && (
+                <button
+                  onClick={() => { onClose(); navigate('/care-finder'); }}
+                  className="mt-2.5 flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  <MapPin size={13} /> Find nearby care
+                </button>
+              )}
             </div>
           )}
 
@@ -185,7 +199,7 @@ export default function SessionSummary({ session, messages, severity, diagnosis,
               <ul className="flex flex-col gap-1.5">
                 {diagnosis.recommendations.map((r, i) => (
                   <li key={i} className="relative pl-3 text-[13px] text-muted-foreground">
-                    <span className="absolute left-0 text-muted-foreground/70">–</span> {r}
+                    <span className="absolute left-0 text-muted-foreground">–</span> {r}
                   </li>
                 ))}
               </ul>

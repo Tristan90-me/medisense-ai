@@ -242,13 +242,12 @@ export default function Landing() {
             <a href="#faq" className="text-sm text-muted-foreground transition-colors hover:text-primary">FAQ</a>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/login">
-              <button className="rounded-full border border-border px-5 py-2 text-[13px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary">Sign in</button>
-            </Link>
-            <Link to="/register">
-              <button className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover active:scale-[0.98]">
-                Get started <ArrowRight size={14} />
-              </button>
+            <Link to="/login" className="rounded-full border border-border px-5 py-2 text-[13px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary">Sign in</Link>
+            <Link
+              to="/register"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover active:scale-[0.98]"
+            >
+              Get started <ArrowRight size={14} />
             </Link>
           </div>
         </div>
@@ -271,14 +270,13 @@ export default function Landing() {
               and gives you a ranked differential — the same way a doctor thinks, available anytime.
             </p>
             <div className="mb-8 flex flex-wrap gap-4">
-              <Link to="/register">
-                <button className="inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover">
-                  Check your symptoms <ArrowRight size={16} />
-                </button>
+              <Link
+                to="/register"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+              >
+                Check your symptoms <ArrowRight size={16} />
               </Link>
-              <Link to="/login">
-                <button className="rounded-full border border-border px-7 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary">Sign in</button>
-              </Link>
+              <Link to="/login" className="rounded-full border border-border px-7 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary">Sign in</Link>
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2.5">
               {['No appointment needed', 'Private & secure', 'Always available'].map((t, i) => (
@@ -397,10 +395,11 @@ export default function Landing() {
           <p className="mb-9 text-[15px] leading-relaxed text-primary-foreground/80">
             Create your free account and get your first symptom assessment in under two minutes.
           </p>
-          <Link to="/register">
-            <button className="inline-flex items-center gap-2 rounded-full bg-primary-foreground px-8 py-3.5 text-[15px] font-semibold text-primary transition-colors hover:bg-primary-foreground/90">
-              Start for free <ArrowRight size={16} />
-            </button>
+          <Link
+            to="/register"
+            className="inline-flex items-center gap-2 rounded-full bg-primary-foreground px-8 py-3.5 text-[15px] font-semibold text-primary transition-colors hover:bg-primary-foreground/90"
+          >
+            Start for free <ArrowRight size={16} />
           </Link>
           <p className="mt-5 text-xs text-primary-foreground/55">No credit card required · Always free to use</p>
         </Reveal>
@@ -415,11 +414,11 @@ export default function Landing() {
             </div>
             <span className="text-sm font-bold text-ink-foreground/90">MediSense AI</span>
           </div>
-          <p className="max-w-[520px] text-xs leading-relaxed text-ink-foreground/40">
+          <p className="max-w-[520px] text-xs leading-relaxed text-ink-foreground/60">
             MediSense AI is not a substitute for professional medical advice, diagnosis, or treatment.
             Always consult a qualified healthcare provider.
           </p>
-          <p className="text-xs text-ink-foreground/30">© {new Date().getFullYear()} MediSense AI. Final year project.</p>
+          <p className="text-xs text-ink-foreground/55">© {new Date().getFullYear()} MediSense AI. Final year project.</p>
         </div>
       </footer>
     </div>

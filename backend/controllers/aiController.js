@@ -1,8 +1,19 @@
 const Session = require("../models/Session");
 const HealthProfile = require("../models/HealthProfile");
+const SystemSetting = require("../models/SystemSetting");
 const { chat, chatStream, generateSummary } = require("../utils/gemini");
 const { resolveDependentId } = require("../utils/resolveDependent");
 const { computeTriageScore } = require("../utils/triage");
+const { classifySymptoms } = require("../ml/symptomClassifier");
+
+// Loads the admin-editable custom emergency-keyword list (see
+// models/SystemSetting.js, key 'emergencyKeywords') for the rule-based
+// triage cross-check. Not a hot-path-optimized cache — a small collection,
+// one extra findOne per message, acceptable for this project's scale.
+const getEmergencyKeywords = async () => {
+  const setting = await SystemSetting.findOne({ key: "emergencyKeywords" });
+  return setting?.value || [];
+};
 
 // ─── Start or Resume Session ───────────────────────────────────────────────
 const startSession = async (req, res) => {
@@ -104,12 +115,23 @@ const sendMessage = async (req, res) => {
 
     // Independent rule-based cross-check — computed from the same
     // just-updated symptom list, never from the LLM's own severity output.
-    const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile);
+    const emergencyKeywords = await getEmergencyKeywords();
+    const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile, emergencyKeywords);
     session.ruleBasedTriage = ruleBasedTriage;
     session.severityMismatch =
       ruleBasedTriage.level === "Critical" &&
       parsed.severity?.level !== "Critical" &&
       !parsed.emergency;
+
+    // Once flagged, stays flagged permanently as a historical record — this
+    // only ever flips false→true, never gets cleared automatically. Reviewing
+    // (see adminController.reviewSession) sets reviewedAt without touching this.
+    if (parsed.emergency || session.severityMismatch) session.flaggedForReview = true;
+
+    // Third independent signal (Phase 9) — a locally-run classifier, never
+    // informed by the LLM's own output, same spirit as ruleBasedTriage above.
+    const mlClassification = classifySymptoms(session.symptoms);
+    session.mlClassification = mlClassification;
 
     await session.save();
 
@@ -123,6 +145,7 @@ const sendMessage = async (req, res) => {
       sessionStatus: session.status,
       ruleBasedTriage,
       severityMismatch: session.severityMismatch,
+      mlClassification,
     });
   } catch (err) {
     console.error("sendMessage error:", err);
@@ -200,12 +223,21 @@ const sendMessageStream = async (req, res) => {
       session.status = "completed";
     }
 
-    const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile);
+    const emergencyKeywords = await getEmergencyKeywords();
+    const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile, emergencyKeywords);
     session.ruleBasedTriage = ruleBasedTriage;
     session.severityMismatch =
       ruleBasedTriage.level === "Critical" &&
       parsed.severity?.level !== "Critical" &&
       !parsed.emergency;
+
+    // Once flagged, stays flagged permanently as a historical record — this
+    // only ever flips false→true, never gets cleared automatically. Reviewing
+    // (see adminController.reviewSession) sets reviewedAt without touching this.
+    if (parsed.emergency || session.severityMismatch) session.flaggedForReview = true;
+
+    const mlClassification = classifySymptoms(session.symptoms);
+    session.mlClassification = mlClassification;
 
     await session.save();
 
@@ -220,6 +252,7 @@ const sendMessageStream = async (req, res) => {
       sessionStatus: session.status,
       ruleBasedTriage,
       severityMismatch: session.severityMismatch,
+      mlClassification,
     });
     res.end();
   } catch (err) {

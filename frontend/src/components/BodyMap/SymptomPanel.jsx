@@ -150,7 +150,7 @@ export default function SymptomPanel({ region, onClose }) {
           <p className="text-[15px] font-bold text-foreground">{regionLabel}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">Select all that apply</p>
           {regionDescription && (
-            <p className="mt-1.5 max-w-[420px] text-[11.5px] leading-relaxed text-muted-foreground/80">
+            <p className="mt-1.5 max-w-[420px] text-[11.5px] leading-relaxed text-muted-foreground">
               {regionDescription}
             </p>
           )}
@@ -191,7 +191,7 @@ export default function SymptomPanel({ region, onClose }) {
               <span className="flex flex-col gap-0.5">
                 <span className={cn(isSelected && 'font-medium')}>{s}</span>
                 {description && (
-                  <span className="text-[11px] leading-snug text-muted-foreground/80">
+                  <span className="text-[11px] leading-snug text-muted-foreground">
                     {description}
                   </span>
                 )}

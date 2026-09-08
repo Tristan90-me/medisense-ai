@@ -14,14 +14,20 @@
   --card-foreground: hsl(213 64% 16%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(213 64% 16%);
-  --primary: hsl(217 91% 60%);
-  --primary-hover: hsl(221 83% 53%);
-  --primary-active: hsl(224 76% 48%);
+  /* primary/muted-foreground shifted one step darker in the blue/slate scale
+     (assets/design-tokens.json) during the Phase 10 accessibility audit —
+     the original values (blue.500, slate.500) measured 3.63:1 and 4.48:1
+     against their actual paired backgrounds/text, both just under WCAG AA's
+     4.5:1 minimum for normal text. Verified via axe-core against the live
+     app, not just calculated in isolation. */
+  --primary: hsl(221 83% 53%);
+  --primary-hover: hsl(224 76% 48%);
+  --primary-active: hsl(226 71% 40%);
   --primary-foreground: hsl(0 0% 100%);
   --secondary: hsl(258 90% 66%);
   --secondary-foreground: hsl(0 0% 100%);
   --muted: hsl(210 40% 96%);
-  --muted-foreground: hsl(215 16% 47%);
+  --muted-foreground: hsl(215 19% 35%);
   --accent: hsl(160 84% 39%);
   --accent-foreground: hsl(0 0% 100%);
   --destructive: hsl(0 72% 51%);
@@ -31,16 +37,21 @@
   --ring: hsl(217 91% 60%);
   --radius: 0.625rem;
 
-  /* Clinical severity scale — distinct from generic semantic colors, see docs/brand-guidelines.md */
+  /* Clinical severity scale — distinct from generic semantic colors, see docs/brand-guidelines.md.
+     -fg values darkened during the Phase 10 accessibility audit: low/moderate/high
+     originally measured 3.21:1 / 3.04:1 / 4.35:1 against their own -bg pairing via
+     axe-core against the live app — all under WCAG AA's 4.5:1 minimum for normal
+     text, despite reading as "fine" in isolation. critical was already compliant
+     (5.24:1) and is unchanged. */
   --severity-low: hsl(142 71% 45%);
   --severity-low-bg: hsl(138 76% 97%);
-  --severity-low-fg: hsl(142 76% 36%);
+  --severity-low-fg: hsl(142 76% 28%);
   --severity-moderate: hsl(38 92% 50%);
   --severity-moderate-bg: hsl(48 100% 96%);
-  --severity-moderate-fg: hsl(32 95% 44%);
+  --severity-moderate-fg: hsl(32 95% 33%);
   --severity-high: hsl(0 84% 60%);
   --severity-high-bg: hsl(0 86% 97%);
-  --severity-high-fg: hsl(0 72% 51%);
+  --severity-high-fg: hsl(0 74% 42%);
   --severity-critical: hsl(258 90% 66%);
   --severity-critical-bg: hsl(250 100% 98%);
   --severity-critical-fg: hsl(262 83% 58%);
@@ -79,11 +90,14 @@
   --input: hsl(217 33% 17%);
   --ring: hsl(213 94% 68%);
 
-  --severity-low-bg: hsl(142 76% 36%);
+  /* Same Phase 10 audit fix as the light-mode block above — dark mode's
+     bg/fg roles are swapped (saturated bg + pale text) but contrast is
+     symmetric, so it had the identical failing ratios. */
+  --severity-low-bg: hsl(142 76% 28%);
   --severity-low-fg: hsl(138 76% 97%);
-  --severity-moderate-bg: hsl(32 95% 44%);
+  --severity-moderate-bg: hsl(32 95% 33%);
   --severity-moderate-fg: hsl(48 100% 96%);
-  --severity-high-bg: hsl(0 72% 51%);
+  --severity-high-bg: hsl(0 74% 42%);
   --severity-high-fg: hsl(0 86% 97%);
   --severity-critical-bg: hsl(262 83% 58%);
   --severity-critical-fg: hsl(250 100% 98%);

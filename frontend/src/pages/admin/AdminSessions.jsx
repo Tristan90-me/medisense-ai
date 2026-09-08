@@ -178,7 +178,7 @@ export default function AdminSessions() {
                           {s.severityScore ? ` (${s.severityScore}/10)` : ''}
                         </Badge>
                       ) : (
-                        <span className="text-xs text-muted-foreground/50">—</span>
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell>

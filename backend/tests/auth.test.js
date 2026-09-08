@@ -136,6 +136,21 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });
+
+  test('rejects an admin account with the same generic message, and never sends an OTP', async () => {
+    await createVerifiedUser({ role: 'admin' });
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'jane@example.com', password: 'password123' });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ success: false, message: 'Invalid credentials' });
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    const stored = await User.findOne({ email: 'jane@example.com' });
+    expect(stored.loginOtp).toBeFalsy();
+  });
 });
 
 describe('POST /api/auth/verify-otp', () => {
@@ -231,6 +246,22 @@ describe('POST /api/auth/verify-otp', () => {
       .send({ email: 'jane@example.com', otp: '000000' });
 
     expect(res.status).toBe(429);
+  });
+
+  test('defense-in-depth: an admin account is rejected even with a correct, live OTP', async () => {
+    // login() never generates an OTP for an admin account, so this scenario
+    // shouldn't be reachable in practice — this proves verify-otp's own
+    // role: 'user' filter holds independently, the same way adminVerifyOtp's
+    // role: 'admin' filter does not just rely on adminLogin's own gate.
+    const user = await createVerifiedUser({ role: 'admin' });
+    const rawOtp = user.generateOtp();
+    await user.save({ validateBeforeSave: false });
+
+    const res = await request(app)
+      .post('/api/auth/verify-otp')
+      .send({ email: 'jane@example.com', otp: rawOtp });
+
+    expect(res.status).toBe(404);
   });
 });
 

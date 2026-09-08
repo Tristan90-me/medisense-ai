@@ -1,8 +1,10 @@
 const crypto = require('crypto');
+const { format } = require('fast-csv');
 const User = require('../models/User');
 const Session = require('../models/Session');
 const HealthProfile = require('../models/HealthProfile');
 const { sendEmail, adminInviteEmailTemplate } = require('../utils/email');
+const { logAdminAction } = require('../utils/auditLogger');
 
 // ── Overview stats ─────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
@@ -134,6 +136,14 @@ exports.toggleUserStatus = async (req, res) => {
     user.isActive = !user.isActive;
     await user.save({ validateBeforeSave: false });
 
+    try {
+      await logAdminAction({
+        actor: req.user._id, action: 'user.toggle_status', targetType: 'User', targetId: user._id, metadata: { isActive: user.isActive }, ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('logAdminAction failed (user.toggle_status):', logErr.message);
+    }
+
     res.json({ message: `User ${user.isActive ? 'activated' : 'deactivated'}`, isActive: user.isActive });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -163,6 +173,169 @@ exports.getAllSessions = async (req, res) => {
     res.json({ sessions, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+// ── Get flagged sessions (moderation queue) ─────────────────────────────────
+exports.getFlaggedSessions = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+
+    const query = { flaggedForReview: true };
+    if (status === 'pending') query.reviewedAt = null;
+    else if (status === 'reviewed') query.reviewedAt = { $ne: null };
+
+    const [sessions, total] = await Promise.all([
+      Session.find(query)
+        .select('-messages')
+        .populate('user', 'name email')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(Number(limit)),
+      Session.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true, sessions, total, page: Number(page), pages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── Review a flagged session ────────────────────────────────────────────────
+exports.reviewSession = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
+
+    const { reviewNotes } = req.body;
+    session.reviewedBy = req.user._id;
+    session.reviewedAt = new Date();
+    session.reviewNotes = reviewNotes || '';
+    await session.save();
+
+    try {
+      await logAdminAction({
+        actor: req.user._id, action: 'session.review', targetType: 'Session', targetId: session._id, metadata: { reviewNotes }, ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('logAdminAction failed (session.review):', logErr.message);
+    }
+
+    res.json({ success: true, session });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── Export users as CSV ─────────────────────────────────────────────────────
+// Streams rows directly to the response (no pagination, no in-memory buffer
+// of the full result set) — respects the same `search` filter as getUsers.
+exports.exportUsersCsv = async (req, res) => {
+  try {
+    const { search = '' } = req.query;
+    const query = search
+      ? {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      }
+      : {};
+
+    try {
+      await logAdminAction({
+        actor: req.user._id, action: 'export.users', targetType: 'Export', targetId: null, metadata: { filters: req.query }, ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('logAdminAction failed (export.users):', logErr.message);
+    }
+
+    // Session counts computed up front (one aggregation) since a per-row
+    // lookup while streaming would be far more expensive at scale.
+    const sessionCounts = await Session.aggregate([
+      { $group: { _id: '$user', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    sessionCounts.forEach((s) => { countMap[s._id.toString()] = s.count; });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="users.csv"');
+
+    const csvStream = format({ headers: true });
+    csvStream.pipe(res);
+
+    const cursor = User.find(query)
+      .select('name email role isActive createdAt')
+      .sort({ createdAt: -1 })
+      .cursor();
+
+    for await (const user of cursor) {
+      csvStream.write({
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt?.toISOString() || '',
+        sessionCount: countMap[user._id.toString()] || 0,
+      });
+    }
+    csvStream.end();
+  } catch (err) {
+    // Headers may already be sent once streaming has started — fall back to
+    // just ending the response rather than trying to send a JSON error body.
+    if (res.headersSent) return res.end();
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── Export sessions as CSV ──────────────────────────────────────────────────
+exports.exportSessionsCsv = async (req, res) => {
+  try {
+    const { severity, emergency, status } = req.query;
+    const query = {};
+    if (severity) query.severityLevel = severity;
+    if (emergency === 'true') query.emergencyDetected = true;
+    if (status) query.status = status;
+
+    try {
+      await logAdminAction({
+        actor: req.user._id, action: 'export.sessions', targetType: 'Export', targetId: null, metadata: { filters: req.query }, ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('logAdminAction failed (export.sessions):', logErr.message);
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="sessions.csv"');
+
+    const csvStream = format({ headers: true });
+    csvStream.pipe(res);
+
+    const cursor = Session.find(query)
+      .select('-messages')
+      .populate('user', 'name email')
+      .sort({ createdAt: -1 })
+      .cursor();
+
+    for await (const session of cursor) {
+      csvStream.write({
+        userName: session.user?.name || '',
+        userEmail: session.user?.email || '',
+        mode: session.mode,
+        status: session.status,
+        severityLevel: session.severityLevel || '',
+        severityScore: session.severityScore ?? '',
+        emergencyDetected: session.emergencyDetected,
+        flaggedForReview: session.flaggedForReview,
+        createdAt: session.createdAt?.toISOString() || '',
+      });
+    }
+    csvStream.end();
+  } catch (err) {
+    if (res.headersSent) return res.end();
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -212,7 +385,22 @@ exports.inviteAdmin = async (req, res) => {
       // report total failure, since it's a real, resendable invite even
       // though this particular email attempt didn't go out.
       console.error('inviteAdmin email send failed:', emailErr.message);
+      try {
+        await logAdminAction({
+          actor: req.user._id, action: 'admin.invite', targetType: 'User', targetId: user._id, metadata: { email: user.email, name: user.name }, ip: req.ip,
+        });
+      } catch (logErr) {
+        console.error('logAdminAction failed (admin.invite):', logErr.message);
+      }
       return res.status(201).json({ message: 'Invite created, but the email failed to send. Try inviting this address again to resend it.' });
+    }
+
+    try {
+      await logAdminAction({
+        actor: req.user._id, action: 'admin.invite', targetType: 'User', targetId: user._id, metadata: { email: user.email, name: user.name }, ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('logAdminAction failed (admin.invite):', logErr.message);
     }
 
     res.status(201).json({ message: 'Invite sent.' });
@@ -252,6 +440,15 @@ exports.revokeInvite = async (req, res) => {
       return res.status(404).json({ message: 'Pending invite not found' });
 
     await invite.deleteOne();
+
+    try {
+      await logAdminAction({
+        actor: req.user._id, action: 'admin.invite.revoke', targetType: 'User', targetId: invite._id, metadata: { email: invite.email }, ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('logAdminAction failed (admin.invite.revoke):', logErr.message);
+    }
+
     res.json({ message: 'Invite revoked.' });
   } catch (err) {
     res.status(500).json({ message: err.message });
