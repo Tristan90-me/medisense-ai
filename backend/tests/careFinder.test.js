@@ -159,6 +159,22 @@ describe('Care Finder API', () => {
     expect(sentQuery).not.toContain('"amenity"="dentist"');
   });
 
+  test('hospital/clinic queries only request nodes, not ways (avoids inaccurate way-center coordinates)', async () => {
+    mockOverpassOk();
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng, type: 'hospital' })
+      .set('Authorization', `Bearer ${token}`);
+
+    const [, options] = global.fetch.mock.calls[0];
+    const sentQuery = decodeURIComponent(options.body.replace(/^data=/, ''));
+    expect(sentQuery).toContain('node["amenity"="hospital"]');
+    expect(sentQuery).not.toContain('way["amenity"="hospital"]');
+  });
+
   test('missing lat/lng is rejected with 400 before any Overpass call is made', async () => {
     mockOverpassOk();
     const user = await createUser();
@@ -232,6 +248,187 @@ describe('Care Finder API', () => {
     const res = await request(app)
       .get('/api/care-finder/nearby')
       .query({ lat: ORIGIN.lat, lng: ORIGIN.lng });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/care-finder/geocode', () => {
+  const realFetch = global.fetch;
+  afterEach(() => { global.fetch = realFetch; });
+
+  test('returns normalized candidate matches', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ([
+        { display_name: 'Springfield, IL, USA', lat: '39.7817', lon: '-89.6501' },
+        { display_name: 'Springfield, MA, USA', lat: '42.1015', lon: '-72.5898' },
+      ]),
+    });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/geocode')
+      .query({ q: 'Springfield' })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.results).toEqual([
+      { label: 'Springfield, IL, USA', lat: 39.7817, lng: -89.6501 },
+      { label: 'Springfield, MA, USA', lat: 42.1015, lng: -72.5898 },
+    ]);
+  });
+
+  test('rejects a too-short query with 400', async () => {
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/geocode')
+      .query({ q: 'a' })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  test('a Nominatim failure returns a graceful 502', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/geocode')
+      .query({ q: 'Springfield' })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(502);
+  });
+
+  test('requires authentication', async () => {
+    const res = await request(app).get('/api/care-finder/geocode').query({ q: 'Springfield' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/care-finder/reverse', () => {
+  const realFetch = global.fetch;
+  afterEach(() => { global.fetch = realFetch; });
+
+  test('returns a readable label for a matched coordinate', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ display_name: '123 Main St, Springfield, IL' }),
+    });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/reverse')
+      .query({ lat: 39.7817, lng: -89.6501 })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.label).toBe('123 Main St, Springfield, IL');
+  });
+
+  test('a miss (no match) is not an error — returns a null label', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/reverse')
+      .query({ lat: 0, lng: 0 })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, label: null });
+  });
+
+  test('invalid coordinates are rejected with 400', async () => {
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/reverse')
+      .query({ lat: 999, lng: 0 })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/care-finder/directions', () => {
+  const realFetch = global.fetch;
+  afterEach(() => { global.fetch = realFetch; });
+
+  const MOCK_OSRM_ROUTE = {
+    code: 'Ok',
+    routes: [{
+      distance: 3400,
+      duration: 540,
+      geometry: { coordinates: [[-74.006, 40.7128], [-74.005, 40.7135], [-74.0, 40.715]] },
+      legs: [{
+        steps: [
+          { distance: 200, duration: 30, name: '', maneuver: { type: 'depart' } },
+          { distance: 3000, duration: 480, name: 'Broadway', maneuver: { type: 'turn', modifier: 'right' } },
+          { distance: 200, duration: 30, name: '', maneuver: { type: 'arrive' } },
+        ],
+      }],
+    }],
+  };
+
+  test('returns route geometry (converted to [lat,lng]), distance/duration, and plain-English steps', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => MOCK_OSRM_ROUTE });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/directions')
+      .query({ fromLat: 40.7128, fromLng: -74.006, toLat: 40.715, toLng: -74.0 })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.distanceKm).toBe(3.4);
+    expect(res.body.durationMin).toBe(9);
+    expect(res.body.geometry).toEqual([[40.7128, -74.006], [40.7135, -74.005], [40.715, -74.0]]);
+    expect(res.body.steps).toEqual([
+      { instruction: 'Head out', distanceKm: 0.2 },
+      { instruction: 'Turn right onto Broadway', distanceKm: 3 },
+      { instruction: 'Arrive at your destination', distanceKm: 0.2 },
+    ]);
+  });
+
+  test('OSRM returning no route is treated as a graceful 502, not a crash', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ code: 'NoRoute', routes: [] }) });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/directions')
+      .query({ fromLat: 40.7128, fromLng: -74.006, toLat: 40.715, toLng: -74.0 })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(502);
+  });
+
+  test('missing coordinates are rejected with 400', async () => {
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/directions')
+      .query({ fromLat: 40.7128, fromLng: -74.006 })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  test('requires authentication', async () => {
+    const res = await request(app)
+      .get('/api/care-finder/directions')
+      .query({ fromLat: 40.7128, fromLng: -74.006, toLat: 40.715, toLng: -74.0 });
 
     expect(res.status).toBe(401);
   });
