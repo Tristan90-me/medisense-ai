@@ -7,7 +7,7 @@ import useVoice from '../../hooks/useVoice';
 import { Button } from '@/components/ui/button';
 import {
   X, Send, Mic, MicOff, Bot,
-  Zap, ClipboardList, Trash2,
+  Zap, ClipboardList, Trash2, LogIn, UserPlus,
 } from 'lucide-react';
 
 // The open/close trigger for this panel lives in FloatingMenu now (the
@@ -50,6 +50,11 @@ export default function AIAssistant() {
     navigate(`/session?mode=${mode}`);
   };
 
+  const handleAuthNavigate = (path) => {
+    closeChat();
+    navigate(path);
+  };
+
   return (
     <>
       <AnimatePresence>
@@ -73,18 +78,55 @@ export default function AIAssistant() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon-sm" onClick={() => setShowModeSelect((p) => !p)} title="Start a session">
-                  <Zap size={15} />
-                </Button>
-                <Button variant="ghost" size="icon-sm" onClick={clearMessages} title="Clear chat">
-                  <Trash2 size={15} />
-                </Button>
+                {isAuthenticated && (
+                  <>
+                    <Button variant="ghost" size="icon-sm" onClick={() => setShowModeSelect((p) => !p)} title="Start a session">
+                      <Zap size={15} />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={clearMessages} title="Clear chat">
+                      <Trash2 size={15} />
+                    </Button>
+                  </>
+                )}
                 <Button variant="ghost" size="icon-sm" onClick={closeChat}>
                   <X size={15} />
                 </Button>
               </div>
             </div>
 
+            {!isAuthenticated ? (
+              /* Guest gate — stops here rather than letting a signed-out
+                 visitor type into a chat that will only fail once they hit
+                 send; POST /api/ai/chat already requires auth server-side,
+                 this just avoids wasting their effort finding that out. */
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Bot size={20} />
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground">Sign in to chat</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                    Create a free account or sign in to talk with your health assistant.
+                  </p>
+                </div>
+                <div className="mt-1 flex flex-col items-center gap-2">
+                  <Button
+                    onClick={() => handleAuthNavigate('/login')}
+                    className="rounded-full px-5 py-2 text-[13px]"
+                  >
+                    <LogIn size={14} /> Sign In
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleAuthNavigate('/register')}
+                    className="rounded-full px-5 py-2 text-[13px]"
+                  >
+                    <UserPlus size={14} /> Sign Up
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Mode select dropdown */}
             <AnimatePresence>
               {showModeSelect && isAuthenticated && (
@@ -200,6 +242,8 @@ export default function AIAssistant() {
                 <Send size={14} />
               </Button>
             </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

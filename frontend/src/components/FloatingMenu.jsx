@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, MessageCircle, Sun, Moon, Monitor } from 'lucide-react';
 import useTheme from '../hooks/useTheme';
@@ -7,6 +8,16 @@ import { useAI } from '../context/AIContext';
 const THEME_ORDER = ['light', 'dark', 'system'];
 const THEME_ICON = { light: Sun, dark: Moon, system: Monitor };
 const THEME_LABEL = { light: 'Light mode', dark: 'Dark mode', system: 'Use system theme' };
+
+// Routes with their own true-bottom, full-width control (a chat input bar)
+// that this FAB would otherwise sit directly on top of. Opening a second,
+// separate assistant chat from inside an active triage session is also just
+// confusing, so this one hides outright rather than merely relocating.
+const HIDDEN_ON_ROUTES = ['/session'];
+
+// Routes with a bottom-right CTA of their own (not full-width, so relocating
+// clears it without needing to hide the whole menu) — raised above it.
+const RAISED_ON_ROUTES = ['/body-map'];
 
 // Single floating cluster (bottom-right) that expands into the theme control
 // and the AI chat toggle — replaces what used to be two separate fixed
@@ -17,6 +28,10 @@ export default function FloatingMenu() {
   const [expanded, setExpanded] = useState(false);
   const { preference, cycleTheme } = useTheme();
   const { isOpen: chatOpen, toggleChat, emergency } = useAI();
+  const location = useLocation();
+
+  if (HIDDEN_ON_ROUTES.includes(location.pathname)) return null;
+  const isRaised = RAISED_ON_ROUTES.includes(location.pathname);
 
   const ThemeIcon = THEME_ICON[preference];
 
@@ -31,7 +46,7 @@ export default function FloatingMenu() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-[999] flex flex-col items-end gap-3">
+    <div className={`fixed right-5 z-[999] flex flex-col items-end gap-3 ${isRaised ? 'bottom-20' : 'bottom-5'}`}>
       <AnimatePresence>
         {expanded && (
           <motion.div
