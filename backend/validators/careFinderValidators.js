@@ -9,6 +9,8 @@ exports.searchNearbyRules = [
 
 exports.geocodeRules = [
   query('q').trim().isLength({ min: 2, max: 200 }).withMessage('q must be between 2 and 200 characters'),
+  query('lat').optional().isFloat({ min: -90, max: 90 }).withMessage('lat must be a number between -90 and 90'),
+  query('lng').optional().isFloat({ min: -180, max: 180 }).withMessage('lng must be a number between -180 and 180'),
 ];
 
 exports.reverseGeocodeRules = [

@@ -81,7 +81,9 @@ router.get('/nearby', protect, validate(searchNearbyRules), searchNearby);
  *     description: >
  *       Proxies OpenStreetMap Nominatim so a user can type a place name or
  *       address and pick a matching location, instead of being limited to
- *       their device's GPS position.
+ *       their device's GPS position. When lat/lng are supplied, results are
+ *       softly biased toward that area (never excluded, just re-ranked) so a
+ *       common place name favors the user's own region.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: query
@@ -89,6 +91,16 @@ router.get('/nearby', protect, validate(searchNearbyRules), searchNearby);
  *         required: true
  *         schema: { type: string, minLength: 2, maxLength: 200 }
  *         description: Free-text place name or address.
+ *       - in: query
+ *         name: lat
+ *         required: false
+ *         schema: { type: number }
+ *         description: Caller's current latitude, used only to bias ranking toward nearby matches.
+ *       - in: query
+ *         name: lng
+ *         required: false
+ *         schema: { type: number }
+ *         description: Caller's current longitude, used only to bias ranking toward nearby matches.
  *     responses:
  *       200:
  *         description: Candidate matches, best-effort ranked by Nominatim.

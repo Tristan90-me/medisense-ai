@@ -11,12 +11,16 @@ const OSRM_URL = 'https://router.project-osrm.org';
 const USER_AGENT = 'MediSenseAI/1.0 (health symptom checker; Care Finder feature)';
 const FETCH_TIMEOUT_MS = 15000;
 const DEFAULT_RADIUS_M = 5000;
+// Jest sets NODE_ENV=test by default — keep the real 1.5s backoff in every
+// real environment, but don't make every persistent-failure test actually
+// wait on it.
+const RETRY_DELAY_MS = process.env.NODE_ENV === 'test' ? 10 : 1500;
 
-// Shared by every OSM-ecosystem call this controller makes (Overpass,
-// Nominatim, OSRM) — same timeout/abort/User-Agent/error-shape contract so
-// each endpoint below stays a few lines of route-specific logic instead of
-// re-deriving fetch plumbing three times.
-const fetchOsm = async (url, options = {}) => {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// One attempt at the underlying fetch — pulled out of fetchOsm so retrying
+// is just "call this again," not a second copy of the timeout/abort setup.
+const fetchOsmOnce = async (url, options) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -25,13 +29,39 @@ const fetchOsm = async (url, options = {}) => {
       headers: { 'User-Agent': USER_AGENT, ...options.headers },
       signal: controller.signal,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const err = new Error(`${url} responded ${response.status} ${response.statusText}`);
+      err.status = response.status;
+      throw err;
+    }
     return await response.json();
-  } catch {
-    return null;
   } finally {
     clearTimeout(timeout);
   }
+};
+
+// Shared by every OSM-ecosystem call this controller makes (Overpass,
+// Nominatim, OSRM) — same timeout/abort/User-Agent/error-shape contract so
+// each endpoint below stays a few lines of route-specific logic instead of
+// re-deriving fetch plumbing three times.
+//
+// These are free, best-effort public instances with no SLA — a single
+// transient failure (a slow node, a momentary rate-limit) is common and
+// usually recovers within a couple of seconds, so one retry after a short
+// delay meaningfully cuts how often a real user sees an error for what was
+// just a blip. Every failure (including a still-failing retry) is logged —
+// this previously failed completely silently, which made a real, live
+// Overpass outage indistinguishable from a bug in our own code.
+const fetchOsm = async (url, options = {}) => {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      return await fetchOsmOnce(url, options);
+    } catch (err) {
+      console.error(`[careFinder] request failed (attempt ${attempt}/2): ${err.message}`);
+      if (attempt < 2) await sleep(RETRY_DELAY_MS);
+    }
+  }
+  return null;
 };
 
 const AMENITY_LABELS = {
@@ -66,6 +96,21 @@ const buildOverpassQuery = (lat, lng, radius, type) => {
   const lines = types.flatMap((t) => AMENITY_LINES[t](radius, lat, lng));
   return `[out:json][timeout:20];\n(\n  ${lines.join('\n  ')}\n);\nout center;`;
 };
+
+// In-memory cache for searchNearby results, keyed by a coarse-rounded
+// (lat, lng, radius, type) so repeat/nearby requests within a few minutes
+// don't each round-trip to Overpass — cuts real load against a fair-use
+// public instance, and (see searchNearby below) lets a stale-but-present
+// entry stand in when Overpass is genuinely down rather than that request
+// failing outright. Capped and wiped wholesale past a small size rather
+// than implementing real LRU eviction — plenty for this app's traffic
+// without unbounded growth over a long-running process.
+const NEARBY_CACHE_TTL_MS = 5 * 60 * 1000;
+const NEARBY_CACHE_MAX_ENTRIES = 500;
+const nearbyCache = new Map();
+
+const nearbyCacheKey = (lat, lng, radius, type) =>
+  `${lat.toFixed(3)},${lng.toFixed(3)},${radius},${type || 'all'}`;
 
 // addr:housenumber + addr:street + addr:city, joined sensibly — OSM data is
 // frequently partial, so this degrades gracefully rather than requiring all
@@ -119,6 +164,12 @@ exports.searchNearby = async (req, res) => {
   const radius = req.query.radius ? parseInt(req.query.radius, 10) : DEFAULT_RADIUS_M;
   const { type } = req.query;
 
+  const cacheKey = nearbyCacheKey(lat, lng, radius, type);
+  const cached = nearbyCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({ success: true, facilities: cached.facilities });
+  }
+
   const query = buildOverpassQuery(lat, lng, radius, type);
   // Node's built-in fetch sends no User-Agent by default. Overpass's public
   // instance (via an Apache-level content-negotiation check) returns a bare
@@ -132,6 +183,10 @@ exports.searchNearby = async (req, res) => {
   });
 
   if (!data) {
+    // Overpass is genuinely unreachable (confirmed happens in practice, not
+    // just a hypothetical) — a stale cache entry for this same spot is a
+    // better answer than a hard failure, even past its normal TTL.
+    if (cached) return res.json({ success: true, facilities: cached.facilities, stale: true });
     return res.status(502).json({
       success: false,
       message: 'Unable to reach the care-facility directory right now. Please try again shortly.',
@@ -144,16 +199,41 @@ exports.searchNearby = async (req, res) => {
     .filter(Boolean)
     .sort((a, b) => a.distanceKm - b.distanceKm);
 
+  if (nearbyCache.size >= NEARBY_CACHE_MAX_ENTRIES) nearbyCache.clear();
+  nearbyCache.set(cacheKey, { facilities, expiresAt: Date.now() + NEARBY_CACHE_TTL_MS });
+
   res.json({ success: true, facilities });
 };
 
-// GET /api/care-finder/geocode?q=
+// How far (in degrees) the soft location bias box extends from the user's
+// current point in each direction — roughly 55km at the equator. Wide
+// enough to favor the user's region without narrowly excluding a real match
+// just outside it (no `bounded` param is sent, so this only re-ranks
+// results, it never filters any out).
+const VIEWBOX_BIAS_DEGREES = 0.5;
+
+// GET /api/care-finder/geocode?q=&lat=&lng=
 // Proxies Nominatim's /search — lets a user type a place name/address and
 // get candidate lat/lng matches back, so Care Finder's origin isn't limited
 // to GPS. `q` is pre-validated (length-bounded) by careFinderValidators.
+// `lat`/`lng` are optional — when the caller's current location is known,
+// it's passed as a soft bias so a common place name (e.g. "Springfield")
+// ranks the nearby match first instead of an equally-valid one continents
+// away.
 exports.geocodeSearch = async (req, res) => {
   const { q } = req.query;
-  const url = `${NOMINATIM_URL}/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
+  const lat = req.query.lat != null ? parseFloat(req.query.lat) : null;
+  const lng = req.query.lng != null ? parseFloat(req.query.lng) : null;
+
+  let url = `${NOMINATIM_URL}/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
+  if (lat != null && lng != null) {
+    const viewbox = [
+      lng - VIEWBOX_BIAS_DEGREES, lat + VIEWBOX_BIAS_DEGREES,
+      lng + VIEWBOX_BIAS_DEGREES, lat - VIEWBOX_BIAS_DEGREES,
+    ].join(',');
+    url += `&viewbox=${viewbox}`;
+  }
+
   const data = await fetchOsm(url);
 
   if (!data) {
@@ -256,3 +336,9 @@ exports.getDirections = async (req, res) => {
     steps,
   });
 };
+
+// Test-only escape hatch — nearbyCache is a module-level singleton, so tests
+// that intentionally reuse the same coordinates (to exercise caching/stale
+// fallback itself) need a way to reset it between cases.
+exports.__clearNearbyCacheForTests = () => nearbyCache.clear();
+exports.__NEARBY_CACHE_TTL_MS = NEARBY_CACHE_TTL_MS;

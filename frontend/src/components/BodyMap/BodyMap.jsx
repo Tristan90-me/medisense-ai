@@ -1,15 +1,68 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
-const regions = {
-  head: { label: 'Head & Neck', d: 'M 100 20 C 75 20 58 38 58 60 C 58 85 75 102 100 105 C 125 102 142 85 142 60 C 142 38 125 20 100 20 Z M 80 105 C 80 118 90 125 100 125 C 110 125 120 118 120 105 Z' },
-  chest: { label: 'Chest', d: 'M 65 128 L 135 128 L 148 200 L 52 200 Z' },
-  abdomen: { label: 'Abdomen', d: 'M 52 202 L 148 202 L 142 265 L 58 265 Z' },
-  leftArm: { label: 'Left Arm', d: 'M 148 130 L 168 128 L 188 230 L 162 232 Z' },
-  rightArm: { label: 'Right Arm', d: 'M 52 130 L 32 128 L 12 230 L 38 232 Z' },
-  leftLeg: { label: 'Left Leg', d: 'M 100 267 L 140 267 L 145 390 L 105 390 Z' },
-  rightLeg: { label: 'Right Leg', d: 'M 100 267 L 60 267 L 55 390 L 95 390 Z' },
-  back: { label: 'Back', d: null, isBack: true },
+// Region geometry, front view. Head/neck and every limb segment are reused
+// unchanged for the back view below — only the torso (chest/abdomen/pelvis
+// vs. upper back/lower back/buttocks) actually differs between the two.
+const FRONT_SHAPES = {
+  head: 'M150,10 C120,10 96,34 96,62 C96,86 112,100 150,100 C188,100 204,86 204,62 C204,34 180,10 150,10 Z',
+  neck: 'M130,100 L170,100 L176,118 L124,118 Z',
+  chest: 'M88,118 L212,118 L196,260 L104,260 Z',
+  abdomen: 'M104,260 L196,260 L202,300 L98,300 Z',
+  pelvis: 'M98,300 L202,300 L200,340 L152,344 L148,344 L100,340 Z',
+  leftUpperArm: 'M212,118 L226,258 L202,258 L200,150 Z',
+  rightUpperArm: 'M88,118 L74,258 L98,258 L100,150 Z',
+  leftForearmHand: 'M226,258 L224,380 L232,415 L200,415 L202,380 L202,258 Z',
+  rightForearmHand: 'M74,258 L76,380 L68,415 L100,415 L98,380 L98,258 Z',
+  leftThigh: 'M152,344 L200,340 L196,465 L156,465 Z',
+  rightThigh: 'M148,344 L100,340 L104,465 L144,465 Z',
+  leftLowerLeg: 'M156,465 L196,465 L188,560 L164,560 Z',
+  rightLowerLeg: 'M144,465 L104,465 L112,560 L136,560 Z',
+  leftFoot: 'M164,560 L188,560 L202,588 L160,588 Z',
+  rightFoot: 'M136,560 L112,560 L98,588 L140,588 Z',
+};
+
+const BACK_SHAPES = {
+  head: FRONT_SHAPES.head,
+  neck: FRONT_SHAPES.neck,
+  upperBack: 'M88,118 L212,118 L204,220 L96,220 Z',
+  lowerBack: 'M96,220 L204,220 L202,300 L98,300 Z',
+  buttocks: 'M98,300 L202,300 L200,340 L152,344 L148,344 L100,340 Z',
+  leftUpperArm: FRONT_SHAPES.leftUpperArm,
+  rightUpperArm: FRONT_SHAPES.rightUpperArm,
+  leftForearmHand: FRONT_SHAPES.leftForearmHand,
+  rightForearmHand: FRONT_SHAPES.rightForearmHand,
+  leftThigh: FRONT_SHAPES.leftThigh,
+  rightThigh: FRONT_SHAPES.rightThigh,
+  leftLowerLeg: FRONT_SHAPES.leftLowerLeg,
+  rightLowerLeg: FRONT_SHAPES.rightLowerLeg,
+  leftFoot: FRONT_SHAPES.leftFoot,
+  rightFoot: FRONT_SHAPES.rightFoot,
+};
+
+// Labels are independent of which view a region is tapped from — a headache
+// is a headache whether you got there via the front or back diagram, so
+// there's exactly one label (and one symptom list, see SymptomPanel.jsx)
+// per region regardless of which of FRONT_SHAPES/BACK_SHAPES rendered it.
+export const REGION_LABELS = {
+  head: 'Head & Face',
+  neck: 'Neck',
+  chest: 'Chest',
+  abdomen: 'Abdomen',
+  pelvis: 'Pelvis & Groin',
+  leftUpperArm: 'Left Upper Arm',
+  rightUpperArm: 'Right Upper Arm',
+  leftForearmHand: 'Left Forearm & Hand',
+  rightForearmHand: 'Right Forearm & Hand',
+  leftThigh: 'Left Thigh',
+  rightThigh: 'Right Thigh',
+  leftLowerLeg: 'Left Lower Leg',
+  rightLowerLeg: 'Right Lower Leg',
+  leftFoot: 'Left Foot',
+  rightFoot: 'Right Foot',
+  upperBack: 'Upper Back',
+  lowerBack: 'Lower Back',
+  buttocks: 'Buttocks',
 };
 
 // Accessibility note: these SVG regions are tappable hit-targets with no native semantics,
@@ -23,6 +76,8 @@ const handleRegionKeyDown = (e, key, onSelect) => {
 };
 
 export default function BodyMap({ selected, onSelect, side, onSideToggle }) {
+  const shapes = side === 'back' ? BACK_SHAPES : FRONT_SHAPES;
+
   return (
     <div className="flex flex-col items-center gap-3">
       {/* Side toggle */}
@@ -45,24 +100,12 @@ export default function BodyMap({ selected, onSelect, side, onSideToggle }) {
       </div>
 
       {/* SVG Body */}
-      <div className="w-40">
+      <div className="w-full max-w-[260px]">
         <svg
-          viewBox="0 0 200 420"
+          viewBox="0 0 300 600"
           xmlns="http://www.w3.org/2000/svg"
           className="h-auto w-full"
         >
-          {/* Body outline */}
-          <ellipse cx="100" cy="62" rx="42" ry="43" fill="none" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="80" y1="104" x2="65" y2="128" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="120" y1="104" x2="135" y2="128" stroke="#cbd5e1" strokeWidth="1.5" />
-          <rect x="52" y="128" width="96" height="140" rx="8" fill="none" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="52" y1="128" x2="12" y2="232" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="148" y1="128" x2="188" y2="232" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="52" y1="268" x2="55" y2="390" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="148" y1="268" x2="145" y2="390" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="80" y1="268" x2="78" y2="390" stroke="#cbd5e1" strokeWidth="1.5" />
-          <line x1="120" y1="268" x2="122" y2="390" stroke="#cbd5e1" strokeWidth="1.5" />
-
           <AnimatePresence mode="wait" initial={false}>
             <motion.g
               key={side}
@@ -71,72 +114,33 @@ export default function BodyMap({ selected, onSelect, side, onSideToggle }) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             >
-              {/* Clickable regions */}
-              {Object.entries(regions).map(([key, region]) => {
-                if (region.isBack) return null;
-                if (side === 'back' && key !== 'back') return null;
-
+              {Object.entries(shapes).map(([key, d]) => {
                 const isSelected = selected === key;
                 return (
                   <path
                     key={key}
-                    d={region.d}
-                    fill={isSelected ? 'rgba(59,130,246,0.25)' : 'rgba(148,163,184,0.1)'}
-                    stroke={isSelected ? '#3b82f6' : 'transparent'}
-                    strokeWidth="2"
-                    className="cursor-pointer transition-colors duration-200 hover:fill-primary/15 focus:outline-none focus-visible:stroke-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+                    d={d}
+                    fill={isSelected ? 'rgba(37,99,235,0.22)' : 'rgba(148,163,184,0.10)'}
+                    stroke={isSelected ? '#2563eb' : '#cbd5e1'}
+                    strokeWidth={isSelected ? 1.75 : 1.25}
+                    className="cursor-pointer transition-colors duration-150 hover:fill-primary/15 focus:outline-none focus-visible:stroke-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
                     role="button"
                     tabIndex={0}
-                    aria-label={region.label}
+                    aria-label={REGION_LABELS[key]}
                     aria-pressed={isSelected}
                     onClick={() => onSelect(key)}
                     onKeyDown={(e) => handleRegionKeyDown(e, key, onSelect)}
                   />
                 );
               })}
-
-              {/* Back view */}
-              {side === 'back' && (
-                <path
-                  d="M 65 128 L 135 128 L 148 265 L 52 265 Z"
-                  fill={selected === 'back' ? 'rgba(59,130,246,0.25)' : 'rgba(148,163,184,0.1)'}
-                  stroke={selected === 'back' ? '#3b82f6' : 'transparent'}
-                  strokeWidth="2"
-                  className="cursor-pointer transition-colors duration-200 hover:fill-primary/15 focus:outline-none focus-visible:stroke-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={regions.back.label}
-                  aria-pressed={selected === 'back'}
-                  onClick={() => onSelect('back')}
-                  onKeyDown={(e) => handleRegionKeyDown(e, 'back', onSelect)}
-                />
-              )}
-
-              {/* Region labels */}
-              {side === 'front' && (
-                <>
-                  <text aria-hidden="true" x="100" y="65" textAnchor="middle" fontSize="8" fill={selected === 'head' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('head')}>Head</text>
-                  <text aria-hidden="true" x="100" y="162" textAnchor="middle" fontSize="8" fill={selected === 'chest' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('chest')}>Chest</text>
-                  <text aria-hidden="true" x="100" y="232" textAnchor="middle" fontSize="8" fill={selected === 'abdomen' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('abdomen')}>Abdomen</text>
-                  <text aria-hidden="true" x="170" y="182" textAnchor="middle" fontSize="7" fill={selected === 'leftArm' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('leftArm')}>Arm</text>
-                  <text aria-hidden="true" x="30" y="182" textAnchor="middle" fontSize="7" fill={selected === 'rightArm' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('rightArm')}>Arm</text>
-                  <text aria-hidden="true" x="122" y="330" textAnchor="middle" fontSize="7" fill={selected === 'leftLeg' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('leftLeg')}>Leg</text>
-                  <text aria-hidden="true" x="78" y="330" textAnchor="middle" fontSize="7" fill={selected === 'rightLeg' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('rightLeg')}>Leg</text>
-                </>
-              )}
-              {side === 'back' && (
-                <text aria-hidden="true" x="100" y="196" textAnchor="middle" fontSize="8" fill={selected === 'back' ? '#3b82f6' : '#94a3b8'} className="cursor-pointer select-none font-sans" onClick={() => onSelect('back')}>Back</text>
-              )}
             </motion.g>
           </AnimatePresence>
         </svg>
       </div>
 
       <p className="min-h-[18px] text-center text-xs text-muted-foreground">
-        {selected ? `Selected: ${regions[selected]?.label || 'Back'}` : 'Tap a body region'}
+        {selected ? `Selected: ${REGION_LABELS[selected]}` : 'Tap a body region'}
       </p>
     </div>
   );
 }
-
-export { regions };

@@ -1,15 +1,24 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, ArrowRight, Check } from 'lucide-react';
-import { regions } from './BodyMap';
+import { REGION_LABELS } from './BodyMap';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+// One symptom list per region — independent of front/back view, since a
+// region tapped from either diagram refers to the same physical body part
+// (see BodyMap.jsx's REGION_LABELS comment). Limb segments are named by
+// anatomical span (e.g. "Lower Leg" covers shin at the front and calf at
+// the back) rather than duplicating content per view.
 const symptomsByRegion = {
   head: [
     'Headache', 'Migraine', 'Dizziness', 'Blurred vision',
-    'Ear pain', 'Sore throat', 'Neck stiffness', 'Runny nose',
-    'Facial pain', 'Jaw pain', 'Ringing in ears', 'Memory issues',
+    'Ear pain', 'Sore throat', 'Runny nose', 'Facial pain',
+    'Jaw pain', 'Ringing in ears', 'Memory issues',
+  ],
+  neck: [
+    'Neck stiffness', 'Pain turning head', 'Swollen glands',
+    'Muscle tension', 'Difficulty swallowing',
   ],
   chest: [
     'Chest pain', 'Shortness of breath', 'Heart palpitations',
@@ -21,31 +30,23 @@ const symptomsByRegion = {
     'Diarrhea', 'Constipation', 'Heartburn', 'Loss of appetite',
     'Abdominal cramps', 'Indigestion', 'Blood in stool',
   ],
-  leftArm: [
-    'Arm pain', 'Weakness', 'Numbness', 'Tingling',
-    'Swelling', 'Joint pain', 'Limited range of motion',
-    'Muscle cramps', 'Elbow pain', 'Wrist pain',
+  pelvis: [
+    'Pelvic pain', 'Groin discomfort', 'Groin swelling',
+    'Urinary discomfort', 'Pain during urination',
   ],
-  rightArm: [
-    'Arm pain', 'Weakness', 'Numbness', 'Tingling',
-    'Swelling', 'Joint pain', 'Limited range of motion',
-    'Muscle cramps', 'Elbow pain', 'Wrist pain',
-  ],
-  leftLeg: [
-    'Leg pain', 'Knee pain', 'Swelling', 'Numbness',
-    'Muscle cramps', 'Weakness', 'Hip pain', 'Foot pain',
-    'Ankle swelling', 'Difficulty walking',
-  ],
-  rightLeg: [
-    'Leg pain', 'Knee pain', 'Swelling', 'Numbness',
-    'Muscle cramps', 'Weakness', 'Hip pain', 'Foot pain',
-    'Ankle swelling', 'Difficulty walking',
-  ],
-  back: [
-    'Lower back pain', 'Upper back pain', 'Stiffness',
-    'Muscle spasms', 'Pain radiating to legs', 'Shoulder blade pain',
-    'Pain when bending', 'Sciatica', 'Spine tenderness',
-  ],
+  leftUpperArm: ['Shoulder pain', 'Upper arm pain', 'Shoulder stiffness', 'Weakness', 'Limited range of motion', 'Muscle cramps'],
+  rightUpperArm: ['Shoulder pain', 'Upper arm pain', 'Shoulder stiffness', 'Weakness', 'Limited range of motion', 'Muscle cramps'],
+  leftForearmHand: ['Elbow pain', 'Wrist pain', 'Numbness', 'Tingling', 'Swelling', 'Hand weakness', 'Joint pain'],
+  rightForearmHand: ['Elbow pain', 'Wrist pain', 'Numbness', 'Tingling', 'Swelling', 'Hand weakness', 'Joint pain'],
+  leftThigh: ['Thigh pain', 'Hip pain', 'Muscle cramps', 'Numbness', 'Weakness'],
+  rightThigh: ['Thigh pain', 'Hip pain', 'Muscle cramps', 'Numbness', 'Weakness'],
+  leftLowerLeg: ['Knee pain', 'Shin pain', 'Calf cramps', 'Swelling', 'Joint pain', 'Difficulty walking'],
+  rightLowerLeg: ['Knee pain', 'Shin pain', 'Calf cramps', 'Swelling', 'Joint pain', 'Difficulty walking'],
+  leftFoot: ['Foot pain', 'Heel pain', 'Ankle swelling', 'Toe numbness', 'Difficulty walking'],
+  rightFoot: ['Foot pain', 'Heel pain', 'Ankle swelling', 'Toe numbness', 'Difficulty walking'],
+  upperBack: ['Upper back pain', 'Shoulder blade pain', 'Stiffness', 'Pain when bending'],
+  lowerBack: ['Lower back pain', 'Muscle spasms', 'Sciatica', 'Pain radiating to legs', 'Spine tenderness'],
+  buttocks: ['Buttock pain', 'Numbness', 'Pain when sitting', 'Hip pain'],
 };
 
 // Short, purely descriptive one-liners — informational only, not diagnostic claims.
@@ -56,12 +57,16 @@ const symptomDescriptions = {
   'Blurred vision': 'Difficulty seeing things clearly or in focus.',
   'Ear pain': 'Discomfort or aching felt in or around the ear.',
   'Sore throat': 'Pain, scratchiness, or irritation when swallowing.',
-  'Neck stiffness': 'Reduced or painful range of motion in the neck.',
   'Runny nose': 'Excess mucus draining from the nose.',
   'Facial pain': 'Discomfort felt across the face or sinuses.',
   'Jaw pain': 'Aching or tenderness around the jaw joint.',
   'Ringing in ears': 'A persistent ringing, buzzing, or hissing sound.',
   'Memory issues': 'Trouble recalling recent events or information.',
+  'Neck stiffness': 'Reduced or painful range of motion in the neck.',
+  'Pain turning head': 'Discomfort or sharp pain when rotating the neck.',
+  'Swollen glands': 'Tender, enlarged lymph nodes in the neck.',
+  'Muscle tension': 'A tight, knotted feeling in the muscles.',
+  'Difficulty swallowing': 'Pain or trouble swallowing food or liquids.',
   'Chest pain': 'Discomfort, tightness, or aching in the chest.',
   'Shortness of breath': 'Difficulty breathing or feeling breathless.',
   'Heart palpitations': 'A noticeable fluttering or pounding heartbeat.',
@@ -83,7 +88,14 @@ const symptomDescriptions = {
   'Abdominal cramps': 'Sharp, tightening pains in the abdomen.',
   'Indigestion': 'Discomfort or a burning feeling after eating.',
   'Blood in stool': 'Visible blood present in a bowel movement.',
-  'Arm pain': 'Aching or discomfort along the arm.',
+  'Pelvic pain': 'Discomfort felt in the lower pelvic area.',
+  'Groin discomfort': 'Aching or tenderness in the groin area.',
+  'Groin swelling': 'Visible puffiness or a lump in the groin.',
+  'Urinary discomfort': 'Discomfort or unusual sensations while urinating.',
+  'Pain during urination': 'A burning or stinging sensation when urinating.',
+  'Shoulder pain': 'Aching or discomfort localized around the shoulder.',
+  'Upper arm pain': 'Discomfort felt between the shoulder and elbow.',
+  'Shoulder stiffness': 'Reduced or painful range of motion in the shoulder.',
   'Weakness': 'Reduced strength or difficulty moving normally.',
   'Numbness': 'A loss of feeling or sensation in the area.',
   'Tingling': 'A prickling or "pins and needles" sensation.',
@@ -93,11 +105,16 @@ const symptomDescriptions = {
   'Muscle cramps': 'Sudden, involuntary muscle tightening.',
   'Elbow pain': 'Discomfort localized around the elbow.',
   'Wrist pain': 'Discomfort localized around the wrist.',
-  'Leg pain': 'Aching or discomfort along the leg.',
-  'Knee pain': 'Discomfort localized around the knee.',
+  'Hand weakness': 'Reduced grip strength or difficulty using the hand.',
+  'Thigh pain': 'Aching or discomfort along the thigh.',
   'Hip pain': 'Discomfort localized around the hip.',
+  'Knee pain': 'Discomfort localized around the knee.',
+  'Shin pain': 'Discomfort along the front of the lower leg.',
+  'Calf cramps': 'Sudden, tight muscle spasms in the back of the lower leg.',
   'Foot pain': 'Discomfort localized in the foot.',
+  'Heel pain': 'Discomfort localized in the heel of the foot.',
   'Ankle swelling': 'Visible puffiness around the ankle.',
+  'Toe numbness': 'A loss of feeling in one or more toes.',
   'Difficulty walking': 'Trouble moving or walking normally.',
   'Lower back pain': 'Discomfort felt in the lower back.',
   'Upper back pain': 'Discomfort felt in the upper back.',
@@ -108,18 +125,30 @@ const symptomDescriptions = {
   'Pain when bending': 'Discomfort that occurs while bending forward or sideways.',
   'Sciatica': 'A shooting sensation felt along the sciatic nerve path.',
   'Spine tenderness': 'Sensitivity or soreness along the spine.',
+  'Buttock pain': 'Aching or discomfort in the buttock area.',
+  'Pain when sitting': 'Discomfort that worsens or appears while seated.',
 };
 
 // Short, non-diagnostic framing for each region — sets expectations for the list below.
 const regionDescriptions = {
-  head: 'Covers head, face, and neck sensations — from headaches to sinus and ear discomfort.',
+  head: 'Covers head and facial sensations — from headaches to sinus and ear discomfort.',
+  neck: 'Covers neck stiffness, swallowing, and throat-adjacent sensations.',
   chest: 'Covers sensations around the chest, breathing, and heartbeat.',
   abdomen: 'Covers stomach and digestive sensations.',
-  leftArm: 'Covers sensations in the left arm, from shoulder to wrist.',
-  rightArm: 'Covers sensations in the right arm, from shoulder to wrist.',
-  leftLeg: 'Covers sensations in the left leg, from hip to foot.',
-  rightLeg: 'Covers sensations in the right leg, from hip to foot.',
-  back: 'Covers sensations across the upper and lower back.',
+  pelvis: 'Covers pelvic, groin, and urinary sensations.',
+  leftUpperArm: 'Covers sensations in the left shoulder and upper arm.',
+  rightUpperArm: 'Covers sensations in the right shoulder and upper arm.',
+  leftForearmHand: 'Covers sensations in the left forearm, wrist, and hand.',
+  rightForearmHand: 'Covers sensations in the right forearm, wrist, and hand.',
+  leftThigh: 'Covers sensations in the left hip and thigh.',
+  rightThigh: 'Covers sensations in the right hip and thigh.',
+  leftLowerLeg: 'Covers sensations in the left knee, shin, and calf.',
+  rightLowerLeg: 'Covers sensations in the right knee, shin, and calf.',
+  leftFoot: 'Covers sensations in the left foot, ankle, and heel.',
+  rightFoot: 'Covers sensations in the right foot, ankle, and heel.',
+  upperBack: 'Covers sensations across the upper back and shoulder blades.',
+  lowerBack: 'Covers sensations across the lower back and spine.',
+  buttocks: 'Covers sensations in the buttock area.',
 };
 
 export default function SymptomPanel({ region, onClose }) {
@@ -127,7 +156,7 @@ export default function SymptomPanel({ region, onClose }) {
   const [selected, setSelected] = useState([]);
 
   const symptoms = symptomsByRegion[region] || [];
-  const regionLabel = regions[region]?.label || 'Back';
+  const regionLabel = REGION_LABELS[region] || region;
   const regionDescription = regionDescriptions[region];
 
   const toggle = (s) => {

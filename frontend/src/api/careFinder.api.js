@@ -4,8 +4,8 @@ export const searchNearby = ({ lat, lng, radius, type }) => api
   .get('/care-finder/nearby', { params: { lat, lng, radius, type } })
   .then((res) => res.data.facilities);
 
-export const geocodeSearch = (q) => api
-  .get('/care-finder/geocode', { params: { q } })
+export const geocodeSearch = (q, coords) => api
+  .get('/care-finder/geocode', { params: { q, lat: coords?.lat, lng: coords?.lng } })
   .then((res) => res.data.results);
 
 export const reverseGeocode = (lat, lng) => api

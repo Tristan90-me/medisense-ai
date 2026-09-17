@@ -8,6 +8,8 @@
     "dev": "nodemon server.js",
     "create-admin": "node scripts/createFirstAdmin.js",
     "migrate:healthprofile-index": "node scripts/migrateHealthProfileIndex.js",
+    "seed:demo": "node scripts/seedDemoData.js",
+    "seed:demo:clear": "node scripts/clearDemoData.js",
     "train-ml": "node ml/train.js",
     "test": "jest",
     "test:watch": "jest --watch"

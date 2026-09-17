@@ -7,6 +7,7 @@ const request = require('supertest');
 const app = require('../app');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { __clearNearbyCacheForTests, __NEARBY_CACHE_TTL_MS } = require('../controllers/careFinderController');
 
 async function createUser(overrides = {}) {
   return User.create({
@@ -81,6 +82,10 @@ function mockOverpassOk(elements = MOCK_ELEMENTS) {
 
 describe('Care Finder API', () => {
   const realFetch = global.fetch;
+
+  beforeEach(() => {
+    __clearNearbyCacheForTests();
+  });
 
   afterEach(() => {
     global.fetch = realFetch;
@@ -173,6 +178,89 @@ describe('Care Finder API', () => {
     const sentQuery = decodeURIComponent(options.body.replace(/^data=/, ''));
     expect(sentQuery).toContain('node["amenity"="hospital"]');
     expect(sentQuery).not.toContain('way["amenity"="hospital"]');
+  });
+
+  test('a repeat request for the same spot within the cache window skips Overpass entirely', async () => {
+    mockOverpassOk();
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const first = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+    expect(first.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    const second = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+    expect(second.status).toBe(200);
+    expect(second.body.facilities).toEqual(first.body.facilities);
+    // No new fetch call — served straight from cache.
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('a persistent Overpass failure retries once before giving up', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(502);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failure on the first attempt but success on the retry still returns results', async () => {
+    global.fetch = jest.fn()
+      .mockRejectedValueOnce(new Error('transient blip'))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ elements: MOCK_ELEMENTS }) });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.facilities).toHaveLength(3);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('when Overpass is down but a stale (expired) cache entry exists, it is served instead of a hard 502', async () => {
+    mockOverpassOk();
+    const user = await createUser();
+    const token = tokenFor(user);
+    const realNow = Date.now;
+
+    const primed = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+    expect(primed.status).toBe(200);
+
+    // Force the cached entry past its TTL (it's still in the Map — nothing
+    // evicts it on a timer — so the fallback path below can find it) and
+    // make Overpass itself fail this time.
+    jest.spyOn(Date, 'now').mockImplementation(() => realNow() + __NEARBY_CACHE_TTL_MS + 1000);
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+
+    const res = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.stale).toBe(true);
+    expect(res.body.facilities).toEqual(primed.body.facilities);
+
+    Date.now.mockRestore();
   });
 
   test('missing lat/lng is rejected with 400 before any Overpass call is made', async () => {
@@ -290,6 +378,35 @@ describe('GET /api/care-finder/geocode', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(400);
+  });
+
+  test('when lat/lng are supplied, the Nominatim request is biased toward that area', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ([]) });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    await request(app)
+      .get('/api/care-finder/geocode')
+      .query({ q: 'Springfield', lat: 40.7128, lng: -74.006 })
+      .set('Authorization', `Bearer ${token}`);
+
+    const [url] = global.fetch.mock.calls[0];
+    expect(url).toContain('viewbox=');
+    expect(url).not.toContain('bounded=1'); // soft bias only, never a hard filter
+  });
+
+  test('omitting lat/lng sends an unbiased search (no viewbox)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ([]) });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    await request(app)
+      .get('/api/care-finder/geocode')
+      .query({ q: 'Springfield' })
+      .set('Authorization', `Bearer ${token}`);
+
+    const [url] = global.fetch.mock.calls[0];
+    expect(url).not.toContain('viewbox=');
   });
 
   test('a Nominatim failure returns a graceful 502', async () => {

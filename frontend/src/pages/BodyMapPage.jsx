@@ -132,8 +132,10 @@ export default function BodyMapPage() {
 
       {/* Content */}
       <div className="flex flex-1 flex-col overflow-hidden sm:flex-row">
-        {/* Left — body map */}
-        <div className="flex shrink-0 items-start justify-center overflow-y-auto border-b border-border bg-card p-4 sm:w-60 sm:border-b-0 sm:border-r sm:p-6">
+        {/* Left — body map. Wider than before (was sm:w-60) — 18 regions
+            need more room per-region than the previous 8 to stay
+            comfortably tappable, especially on touch. */}
+        <div className="flex shrink-0 items-start justify-center overflow-y-auto border-b border-border bg-card p-4 sm:w-80 sm:border-b-0 sm:border-r sm:p-6">
           <BodyMap
             selected={selected}
             onSelect={handleSelect}

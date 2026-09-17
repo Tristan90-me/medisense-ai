@@ -52,6 +52,11 @@ const TYPE_LABELS = {
   hospital: 'Hospital', clinic: 'Clinic', doctors: 'Doctor', pharmacy: 'Pharmacy', dentist: 'Dentist',
 };
 
+// Backend accepts 500-20000m (careFinderValidators.js); these are the steps
+// "Search wider" walks through on an empty-results state, since a fixed 5km
+// default is a real cause of "no results" outside dense areas.
+const RADIUS_STEPS = [5000, 10000, 20000];
+
 const externalDirectionsUrl = (lat, lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
 // Mounted as a child of <MapContainer> — react-leaflet's map-event hooks
@@ -100,6 +105,7 @@ export default function CareFinder() {
   const [pickModeActive, setPickModeActive] = useState(false);
 
   const [type, setType] = useState('');
+  const [radius, setRadius] = useState(5000);
   const [facilities, setFacilities] = useState([]);
   const [facilitiesLoading, setFacilitiesLoading] = useState(false);
   const [facilitiesError, setFacilitiesError] = useState(false);
@@ -117,6 +123,12 @@ export default function CareFinder() {
   // below doesn't treat that assignment as a fresh user query and re-search
   // for the label text itself — which would silently reopen the dropdown.
   const skipNextSearchRef = useRef(false);
+  // Set right before requesting directions so the facility-select effect
+  // below skips its own flyTo — otherwise the camera jumps to the facility
+  // first, then jumps again moments later when the route arrives and
+  // MapViewController's fitBounds reframes it, a visible double-movement
+  // for one user action.
+  const skipFlyToRef = useRef(false);
 
   const requestLocation = useCallback(() => {
     setGeoStatus('pending');
@@ -132,6 +144,7 @@ export default function CareFinder() {
         setLocationSource('gps');
         setLocationLabel(null);
         setGeoStatus('ready');
+        setRadius(RADIUS_STEPS[0]);
       },
       (err) => {
         setGeoStatus('error');
@@ -167,7 +180,7 @@ export default function CareFinder() {
     setSearchLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const results = await geocodeSearch(searchQuery.trim());
+        const results = await geocodeSearch(searchQuery.trim(), coords);
         if (!cancelled) setSearchResults(results);
       } catch {
         if (!cancelled) setSearchResults([]);
@@ -176,6 +189,7 @@ export default function CareFinder() {
       }
     }, 400);
     return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   // Closes the search dropdown on an outside click.
@@ -196,6 +210,10 @@ export default function CareFinder() {
     setGeoStatus('ready');
     setRoute(null);
     setRouteError(false);
+    // A radius widened for the previous location shouldn't silently carry
+    // over to a new one — that's a much bigger search than the user asked
+    // for at this new spot.
+    setRadius(RADIUS_STEPS[0]);
   }, []);
 
   const handleSelectSearchResult = (result) => {
@@ -233,14 +251,18 @@ export default function CareFinder() {
     setRoute(null);
     setRouteError(false);
     try {
-      const data = await searchNearby({ lat: coords.lat, lng: coords.lng, type: type || undefined });
+      const data = await searchNearby({ lat: coords.lat, lng: coords.lng, radius, type: type || undefined });
+      // Old facilities are gone from the DOM once `setFacilities` below
+      // commits — without this, entries for them would sit in this plain
+      // object forever, an unbounded accumulation over a long session.
+      markerRefs.current = {};
       setFacilities(data);
     } catch {
       setFacilitiesError(true);
     } finally {
       setFacilitiesLoading(false);
     }
-  }, [coords, type]);
+  }, [coords, type, radius]);
 
   useEffect(() => { loadFacilities(); }, [loadFacilities]);
 
@@ -250,11 +272,21 @@ export default function CareFinder() {
     if (!selectedFacilityId || !mapRef.current) return;
     const facility = facilities.find((f) => f.id === selectedFacilityId);
     if (!facility) return;
-    mapRef.current.flyTo([facility.lat, facility.lng], Math.max(mapRef.current.getZoom(), 15), { duration: 0.6 });
+    if (skipFlyToRef.current) {
+      skipFlyToRef.current = false;
+    } else {
+      mapRef.current.flyTo([facility.lat, facility.lng], Math.max(mapRef.current.getZoom(), 15), { duration: 0.6 });
+    }
     markerRefs.current[selectedFacilityId]?.openPopup();
   }, [selectedFacilityId, facilities]);
 
   const handleGetDirections = async (facility) => {
+    // Only worth suppressing the flyTo if selecting this facility will
+    // actually change `selectedFacilityId` — if it's already selected,
+    // setSelectedFacilityId is a no-op (React bails on an identical value),
+    // so the effect below never re-fires to consume the flag, which would
+    // leave it incorrectly set for the next, unrelated selection.
+    if (facility.id !== selectedFacilityId) skipFlyToRef.current = true;
     setSelectedFacilityId(facility.id);
     setRouteError(false);
     setRouteLoading(true);
@@ -281,6 +313,9 @@ export default function CareFinder() {
 
   const locationDisplayLabel = locationSource === 'gps' ? 'Your location' : (locationLabel || 'Selected location');
 
+  const nextRadius = RADIUS_STEPS[RADIUS_STEPS.indexOf(radius) + 1];
+  const widenSearch = () => { if (nextRadius) setRadius(nextRadius); };
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
@@ -300,7 +335,7 @@ export default function CareFinder() {
               <p className="font-heading text-sm font-semibold text-foreground">Care Finder</p>
               <p className="text-[11px] text-muted-foreground">
                 {geoStatus === 'ready' && !facilitiesLoading
-                  ? `${facilities.length} nearby`
+                  ? `${facilities.length} nearby within ${radius / 1000} km`
                   : 'Nearby hospitals, clinics & pharmacies'}
               </p>
             </div>
@@ -509,7 +544,7 @@ export default function CareFinder() {
                         <X size={16} />
                       </button>
                     </div>
-                    <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2.5">
+                    <div className="flex max-h-[240px] flex-col gap-1.5 overflow-y-auto border-t border-border/60 pt-2.5">
                       {route.steps.map((s, i) => (
                         <div key={i} className="flex items-center justify-between gap-3 text-xs">
                           <span className="text-foreground">{s.instruction}</span>
@@ -554,8 +589,15 @@ export default function CareFinder() {
                 <SearchX size={22} className="text-muted-foreground" />
                 <p className="text-sm font-medium text-foreground">No care facilities found nearby</p>
                 <p className="max-w-[280px] text-xs leading-relaxed text-muted-foreground">
-                  Try a different facility type, or check back later.
+                  {nextRadius
+                    ? `Nothing within ${radius / 1000} km. Try a different facility type, or widen the search.`
+                    : 'Try a different facility type, or check back later.'}
                 </p>
+                {nextRadius && (
+                  <Button variant="outline" size="sm" onClick={widenSearch}>
+                    Search within {nextRadius / 1000} km
+                  </Button>
+                )}
               </div>
             )}
 
