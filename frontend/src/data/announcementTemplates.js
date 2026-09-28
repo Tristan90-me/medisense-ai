@@ -1,6 +1,13 @@
 // Prefill copy for the admin announcement compose form — picking one just
 // fills the title/body fields, which stay editable. Not backend config:
 // this is pure UI convenience, not something the server enforces.
+//
+// `audience` here is only a display hint (shown next to the template's
+// label in the dropdown) — it does NOT change the admin's "Send to"
+// selection. A template's copy is generic enough to apply to any audience
+// (e.g. the critical-followup message can go to one specific user, not just
+// the full critical-condition cohort), so picking a template never
+// overrides whichever audience the admin already chose.
 const announcementTemplates = [
   {
     id: 'maintenance',

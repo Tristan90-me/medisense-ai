@@ -44,6 +44,10 @@ const audienceBadgeVariant = (a) => {
   return 'outline';
 };
 
+// Display-only — a template's `audience` is a suggestion shown in the
+// dropdown, not something applied automatically (see chooseTemplate below).
+const audienceHintLabel = (value) => AUDIENCE_OPTIONS.find((o) => o.value === value)?.label || value;
+
 export default function AdminAnnouncements() {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -125,6 +129,11 @@ export default function AdminAnnouncements() {
     if (value !== 'user') { setSelectedUser(null); setUserSearch(''); }
   };
 
+  // Templates only prefill text — they never change "Send to". Each
+  // template's `audience` is just a hint shown in the dropdown (e.g.
+  // "suggested for Critical-condition users"); applying one never overrides
+  // whichever audience the admin already picked, so e.g. the critical-
+  // followup copy can be sent to a single specific user too.
   const chooseTemplate = (id) => {
     setTemplateId(id);
     if (id === 'custom') return;
@@ -132,8 +141,6 @@ export default function AdminAnnouncements() {
     if (!tpl) return;
     setTitle(tpl.title);
     setBody(tpl.body);
-    setAudience(tpl.audience);
-    if (tpl.audience !== 'user') { setSelectedUser(null); setUserSearch(''); }
   };
 
   const resetForm = () => {
@@ -319,7 +326,9 @@ export default function AdminAnnouncements() {
                 <SelectContent>
                   <SelectItem value="custom">Custom message</SelectItem>
                   {announcementTemplates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                    <SelectItem key={t.id} value={t.id}>
+                      {`${t.label} — suggested for ${audienceHintLabel(t.audience)}`}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
