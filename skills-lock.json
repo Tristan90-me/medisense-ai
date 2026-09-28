@@ -7,6 +7,12 @@
       "skillPath": "skills/accessibility/SKILL.md",
       "computedHash": "88c64dead9bb55925c7b983f5fd95cfecf30bd8c076fd384cdb17019d1becd87"
     },
+    "animating-react-native-expo": {
+      "source": "tristanmanchester/agent-skills",
+      "sourceType": "github",
+      "skillPath": "animating-react-native-expo/SKILL.md",
+      "computedHash": "3355674665518f4d7ab2c76007e1f21bc123f4b57834534dac904fccc6532fb0"
+    },
     "banner-design": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",
@@ -36,6 +42,24 @@
       "sourceType": "github",
       "skillPath": "skills/find-skills/SKILL.md",
       "computedHash": "b146008599c31057cef1c145774cea5d5afb30e8f43fa802e47a4b461419aaaf"
+    },
+    "gamification-loops": {
+      "source": "omer-metin/skills-for-antigravity",
+      "sourceType": "github",
+      "skillPath": "skills/gamification-loops/SKILL.md",
+      "computedHash": "5c6d90890a2bb618ded9387244dd9d146c2d9f56933208875942038601d489b6"
+    },
+    "gemini-api": {
+      "source": "google/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloud/gemini-api/SKILL.md",
+      "computedHash": "95dc4fa38add33fd81c4ff243b93c62c1a86b646e0a08198a42e3bc0030182bb"
+    },
+    "react-native-brownfield-migration": {
+      "source": "callstackincubator/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-brownfield-migration/SKILL.md",
+      "computedHash": "bc63e487049fc9d2558e243643bda91f353285da0a8610d38c59ce95b0abd31d"
     },
     "slides": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
