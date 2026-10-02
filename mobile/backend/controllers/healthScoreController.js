@@ -2,9 +2,16 @@ const Session = require('../models/Session');
 const HealthProfile = require('../models/HealthProfile');
 const Medication = require('../models/Medication');
 const HealthScore = require('../models/HealthScore');
+const WorkoutLog = require('../models/WorkoutLog');
+const MealLog = require('../models/MealLog');
+const WaterIntake = require('../models/WaterIntake');
+const NutritionGoal = require('../models/NutritionGoal');
 const ACHIEVEMENTS = require('../config/achievements');
 const { computeScore } = require('../utils/computeHealthScore');
 const { resolveDependentId } = require('../utils/resolveDependent');
+const { activityStreak } = require('../utils/activityStreak');
+const { parseDayRange } = require('../utils/dayRange');
+const { sumNutrition } = require('../utils/nutritionMath');
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_HISTORY_ENTRIES = 90;
@@ -59,6 +66,8 @@ exports.getHealthScore = async (req, res) => {
     const scope = { user: req.user._id, dependent };
     const thirtyDaysAgo = new Date(Date.now() - THIRTY_DAYS_MS);
 
+    const { start: todayStart, end: todayEnd } = parseDayRange();
+
     const [
       totalSessions,
       sessionsLast30Days,
@@ -68,6 +77,12 @@ exports.getHealthScore = async (req, res) => {
       activeMedicationsCount,
       profile,
       existing,
+      totalWorkouts,
+      workoutStreak,
+      loggingStreak,
+      hydrationStreak,
+      todaysMeals,
+      nutritionGoal,
     ] = await Promise.all([
       Session.countDocuments(scope),
       Session.countDocuments({ ...scope, createdAt: { $gte: thirtyDaysAgo } }),
@@ -81,7 +96,20 @@ exports.getHealthScore = async (req, res) => {
       Medication.countDocuments({ ...scope, active: true }),
       HealthProfile.findOne(scope),
       HealthScore.findOne(scope),
+      // Fitness/nutrition context (Phase 4) — added to `ctx` below,
+      // untouched by computeScore itself (health-score math is unchanged).
+      WorkoutLog.countDocuments(scope),
+      activityStreak(WorkoutLog, scope, 'loggedAt'),
+      activityStreak(MealLog, scope, 'loggedAt'),
+      activityStreak(WaterIntake, scope, 'loggedAt'),
+      MealLog.find({ ...scope, loggedAt: { $gte: todayStart, $lt: todayEnd } }),
+      NutritionGoal.findOne(scope),
     ]);
+
+    const proteinConsumedToday = sumNutrition(todaysMeals.map((m) => m.nutrition)).proteinG;
+    const proteinGoalHitToday = !!(
+      nutritionGoal?.macroTargets?.proteinG > 0 && proteinConsumedToday >= nutritionGoal.macroTargets.proteinG
+    );
 
     const ctx = {
       totalSessions,
@@ -91,6 +119,11 @@ exports.getHealthScore = async (req, res) => {
       hadCriticalOrEmergencyLast30Days: criticalOrEmergencyCount > 0,
       activeMedicationsCount,
       profileCompleteness: computeProfileCompleteness(profile),
+      totalWorkouts,
+      workoutStreak,
+      loggingStreak,
+      hydrationStreak,
+      proteinGoalHitToday,
     };
 
     const { currentScore, breakdown } = computeScore(ctx);

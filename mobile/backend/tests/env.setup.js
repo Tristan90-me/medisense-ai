@@ -24,3 +24,9 @@ process.env.EMAIL_FROM = 'MediSense AI <test@medisense.local>';
 // required via app.js). The constructor doesn't make a network call and
 // doesn't throw without a key, but set a dummy value to keep it quiet.
 process.env.GEMINI_API_KEY = 'test-gemini-key';
+
+// utils/foodApi.js reads this lazily at call time (not module load) to
+// decide whether to query USDA FoodData Central at all. A dummy default
+// value lets USDA-path tests exercise the real code path; a test that wants
+// the "not configured" degrade behavior deletes it for that test only.
+process.env.USDA_API_KEY = 'test-usda-key';

@@ -348,6 +348,136 @@ const analyzePhoto = async (imageBuffer, mimeType, context = '') => {
   return JSON.parse(response.text);
 };
 
+// ─── Meal Photo Analysis ────────────────────────────────────────────────────
+// Same structured-output mechanism as analyzePhoto, but food-focused: a
+// rough nutrition ESTIMATE meant to prefill a manual food log, not a
+// precise measurement (there's no barcode/database match to ground it in,
+// unlike utils/foodApi.js's OFF/USDA lookups) — every value stays editable
+// by the user before saving.
+const MEAL_ANALYSIS_PROMPT = `
+You are looking at a photo of a meal or food item logged in a nutrition-tracking app.
+
+Identify the foods visible and estimate their combined nutrition. This is a rough ESTIMATE meant to speed up manual logging, not a precise measurement — the user can and should adjust every value before saving.
+
+Respond with:
+- "description": a short plain-language description of what's in the photo.
+- "identifiedFoods": an array of the distinct foods you can identify (e.g. "grilled chicken breast", "steamed broccoli", "white rice").
+- "estimatedNutrition": your best estimate of the whole plate's calories, carbsG, proteinG, fatG.
+- "confidence": "low" (hard to identify portions/foods), "moderate", or "high" (clear photo, common foods, standard portions).
+`;
+
+const MEAL_ANALYSIS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    description: { type: 'STRING' },
+    identifiedFoods: { type: 'ARRAY', items: { type: 'STRING' } },
+    estimatedNutrition: {
+      type: 'OBJECT',
+      properties: {
+        calories: { type: 'NUMBER' },
+        carbsG: { type: 'NUMBER' },
+        proteinG: { type: 'NUMBER' },
+        fatG: { type: 'NUMBER' },
+      },
+      required: ['calories', 'carbsG', 'proteinG', 'fatG'],
+    },
+    confidence: { type: 'STRING', enum: ['low', 'moderate', 'high'] },
+  },
+  required: ['description', 'identifiedFoods', 'estimatedNutrition', 'confidence'],
+};
+
+const analyzeMeal = async (imageBuffer, mimeType, context = '') => {
+  const promptText = context
+    ? `${MEAL_ANALYSIS_PROMPT}\n\nAdditional context provided by the user: ${context}`
+    : MEAL_ANALYSIS_PROMPT;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: [{
+      role: "user",
+      parts: [
+        { text: promptText },
+        { inlineData: { data: imageBuffer.toString("base64"), mimeType } },
+      ],
+    }],
+    config: {
+      temperature: 0.2,
+      responseMimeType: 'application/json',
+      responseSchema: MEAL_ANALYSIS_SCHEMA,
+    },
+  });
+
+  return JSON.parse(response.text);
+};
+
+// ─── Fitness/Nutrition Suggestions ──────────────────────────────────────────
+// Plain-text, single-suggestion completion (no bracket tags, no JSON — same
+// shape as generateSummary) grounded in the day's Daily Energy Ledger (see
+// utils/dailyEnergyLedger.js). Deliberately a separate, narrower system
+// prompt from MEDISENSE_SYSTEM_PROMPT rather than reusing it — this is a
+// wellness suggestion, not a symptom-check turn, and must not drift into
+// diagnostic territory just because it shares a model/client.
+const SUGGESTION_SYSTEM_PROMPT = `
+You are MediSense AI's nutrition and fitness assistant, part of a health app that also does AI-assisted symptom checking. For THIS response, stay strictly in the nutrition/fitness domain — do not diagnose or discuss symptoms.
+
+Voice: warm, clear, reassuring without minimizing, honest about limits. Never say "you definitely need X" or use "cure"/"guaranteed" language — this is a suggestion, not a prescription. Never say "don't worry"; if relevant, say what the numbers suggest instead.
+
+Give ONE short, practical, encouraging suggestion (2-3 sentences max) based on the person's day so far. No extreme calorie or macro recommendations. No markdown, no bullet points, no emoji — plain conversational text.
+`;
+
+// `ledger` is the object returned by utils/dailyEnergyLedger.js's
+// buildLedger. `kind` picks which side of the day's numbers to suggest for.
+const suggestFromEnergyContext = async (ledger, kind = 'meal') => {
+  const summary = `
+Today so far:
+- Calories consumed: ${ledger.consumed}
+- Calories burned (steps + workouts): ${ledger.burnedTotal}
+- Net calorie balance: ${ledger.net > 0 ? "+" : ""}${ledger.net}
+- Daily calorie budget: ${ledger.budget ?? "not set"}
+- Calories remaining: ${ledger.remaining ?? "unknown"}
+`;
+  const ask = kind === "workout"
+    ? "Based on this, suggest what kind of workout (or rest) would make sense for the rest of today."
+    : "Based on this, suggest what kind of meal or snack would make sense next.";
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: [{ role: "user", parts: [{ text: `${summary}\n${ask}` }] }],
+    config: {
+      systemInstruction: SUGGESTION_SYSTEM_PROMPT,
+      temperature: 0.5,
+      maxOutputTokens: 200,
+    },
+  });
+
+  return response.text.trim();
+};
+
+// ─── Daily Tip ───────────────────────────────────────────────────────────────
+// Not personalized to any one user's data — a light, rotating wellness tip
+// for the dashboard. Higher temperature than the rest of this file on
+// purpose: this is meant to feel fresh on repeat calls, where the other
+// functions above intentionally favor consistency.
+const DAILY_TIP_PROMPT = `
+Write ONE short, warm, practical daily health tip (1-2 sentences) for a general audience using a health, fitness, and nutrition tracking app. Rotate across categories across calls: hydration, sleep, movement, nutrition, mindfulness, or recovery — pick one at random each time.
+
+No medical claims, no "cure"/"guaranteed" language, no markdown, no emoji, plain conversational text. Avoid generic phrasing like "stay hydrated" verbatim — be specific and a little unexpected while staying simple.
+`;
+
+const dailyTip = async () => {
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: [{ role: "user", parts: [{ text: DAILY_TIP_PROMPT }] }],
+    config: {
+      temperature: 0.9,
+      maxOutputTokens: 100,
+    },
+  });
+
+  return response.text.trim();
+};
+
 module.exports = {
   chat, chatStream, generateSummary, parseAIResponse, analyzePhoto, MEDISENSE_SYSTEM_PROMPT,
+  analyzeMeal, suggestFromEnergyContext, dailyTip,
 };

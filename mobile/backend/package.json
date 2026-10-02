@@ -10,6 +10,7 @@
     "migrate:healthprofile-index": "node scripts/migrateHealthProfileIndex.js",
     "seed:demo": "node scripts/seedDemoData.js",
     "seed:demo:clear": "node scripts/clearDemoData.js",
+    "seed:exercises": "node scripts/seedExercises.js",
     "train-ml": "node ml/train.js",
     "test": "jest",
     "test:watch": "jest --watch"

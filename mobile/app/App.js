@@ -1,21 +1,30 @@
 import './global.css';
 import { StatusBar } from 'expo-status-bar';
-import { Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import RootNavigator from './src/navigation/RootNavigator';
+
+// Split out so it can read the resolved theme mode — StatusBar itself must
+// render inside ThemeProvider, but App() is the component that sets up
+// ThemeProvider in the first place.
+function StatusBarBridge() {
+  const theme = useTheme();
+  return <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />;
+}
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <View className="flex-1 items-center justify-center bg-background px-6">
-        <Text className="text-3xl font-bold text-primary">MediSense</Text>
-        <Text className="mt-2 text-center text-muted-foreground">
-          Symptoms, fitness and nutrition in one place.
-        </Text>
-        <View className="mt-6 rounded-full bg-energy px-5 py-2">
-          <Text className="font-semibold text-white">Scaffold ready</Text>
-        </View>
-      </View>
-      <StatusBar style="auto" />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <ErrorBoundary>
+            <RootNavigator />
+            <StatusBarBridge />
+          </ErrorBoundary>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

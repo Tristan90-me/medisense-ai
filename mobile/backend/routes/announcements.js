@@ -3,10 +3,10 @@ const router = express.Router();
 const { protect, adminOnly } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const {
-  createAndBroadcast, listAnnouncements, deleteAnnouncement,
+  createAndBroadcast, listAnnouncements, deleteAnnouncement, getCriticalPreview,
 } = require('../controllers/announcementController');
 const {
-  createAnnouncementRules, announcementIdParamRules,
+  createAnnouncementRules, announcementIdParamRules, criticalPreviewRules,
 } = require('../validators/announcementValidators');
 
 // Mixed access on one resource — POST/DELETE need adminOnly, GET is plain
@@ -36,12 +36,37 @@ const {
  *             properties:
  *               title: { type: string, maxLength: 200 }
  *               body: { type: string, maxLength: 2000 }
+ *               audience: { type: string, enum: [all, critical, user], default: all, description: 'all: every user. critical: users with an emergency/Critical-severity session in the trailing window. user: a single targetUserId.' }
+ *               targetUserId: { type: string, description: 'Required when audience is "user" — the recipient User id.' }
+ *               criticalWindowDays: { type: integer, minimum: 1, maximum: 365, default: 30, description: 'Only used when audience is "critical" — how many trailing days to scan for emergency/Critical sessions.' }
  *     responses:
  *       201: { description: Announcement created and broadcast }
  *       400: { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
  *       403: { description: Authenticated but not an admin }
+ *       404: { description: targetUserId not found (audience "user" only) }
  */
 router.post('/', protect, adminOnly, validate(createAnnouncementRules), createAndBroadcast);
+
+/**
+ * @swagger
+ * /announcements/critical-preview:
+ *   get:
+ *     tags: [Announcements]
+ *     summary: Preview how many/which users a 'critical' audience send would reach (admin only)
+ *     description: >
+ *       Read-only — runs the same emergency/Critical-severity-session lookup
+ *       used by a 'critical' broadcast, without creating or sending anything,
+ *       so an admin can see the reach before confirming a bulk send.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema: { type: integer, minimum: 1, maximum: 365, default: 30 }
+ *     responses:
+ *       200: { description: 'Recipient count plus a small sample (name/email)' }
+ *       403: { description: Authenticated but not an admin }
+ */
+router.get('/critical-preview', protect, adminOnly, validate(criticalPreviewRules), getCriticalPreview);
 
 /**
  * @swagger
