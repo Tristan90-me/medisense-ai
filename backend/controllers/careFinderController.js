@@ -1,9 +1,25 @@
 const { haversineKm } = require('../utils/geo');
 
-// Public Overpass instance — no API key, no billing. Fair-use only: keep
+// Public Overpass instances — no API key, no billing. Fair-use only: keep
 // requests low-volume and always bound them with a timeout so a slow/down
 // instance can never hang this endpoint.
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+//
+// The main instance is explicitly documented (OSM wiki) as "currently
+// experiencing overload issues," and that's not theoretical — confirmed
+// live while diagnosing a production 502: two successful requests followed
+// immediately by a 429. The OSM wiki lists several other free, no-API-key,
+// global-coverage mirrors, but only this second one actually answered a
+// real query when live-tested from here — overpass.private.coffee and
+// overpass.kumi.systems both timed out completely (no response at all)
+// across repeated attempts, so they're not included: a mirror that never
+// responds only costs a wasted timeout on the way to the next one, with no
+// upside. maps.mail.ru is itself inconsistent (seen anywhere from ~1.5s to
+// ~15s, and one outright 504), but "sometimes works" still beats retrying
+// an instance that just rate-limited us.
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
 // Nominatim (OSM's free geocoder) and OSRM's public demo routing server —
 // same no-key, fair-use, be-polite-with-a-User-Agent deal as Overpass above.
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
@@ -59,6 +75,29 @@ const fetchOsm = async (url, options = {}) => {
     } catch (err) {
       console.error(`[careFinder] request failed (attempt ${attempt}/2): ${err.message}`);
       if (attempt < 2) await sleep(RETRY_DELAY_MS);
+    }
+  }
+  return null;
+};
+
+// Overpass-specific: tries each mirror in OVERPASS_URLS once, in order,
+// instead of retrying one instance twice. A different server is strictly
+// more likely to help than a short backoff on the one that just failed or
+// rate-limited us (a 429 needs tens of seconds to clear, not 1.5s) — so any
+// failure, including a 429, just moves on to the next mirror. Every failure
+// is still logged, same as fetchOsm, so a genuine all-mirrors outage stays
+// visible rather than silent.
+const fetchOverpass = async (query) => {
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(query)}`,
+  };
+  for (const url of OVERPASS_URLS) {
+    try {
+      return await fetchOsmOnce(url, options);
+    } catch (err) {
+      console.error(`[careFinder] Overpass mirror failed (${url}): ${err.message}`);
     }
   }
   return null;
@@ -172,15 +211,11 @@ exports.searchNearby = async (req, res) => {
 
   const query = buildOverpassQuery(lat, lng, radius, type);
   // Node's built-in fetch sends no User-Agent by default. Overpass's public
-  // instance (via an Apache-level content-negotiation check) returns a bare
+  // instances (via an Apache-level content-negotiation check) return a bare
   // 406 Not Acceptable for requests missing one — confirmed live: identical
   // query, curl (which sends its own UA) gets 200, a bare Node fetch call
-  // gets 406. fetchOsm's User-Agent covers this.
-  const data = await fetchOsm(OVERPASS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-  });
+  // gets 406. fetchOsmOnce's User-Agent covers this.
+  const data = await fetchOverpass(query);
 
   if (!data) {
     // Overpass is genuinely unreachable (confirmed happens in practice, not
@@ -342,3 +377,4 @@ exports.getDirections = async (req, res) => {
 // fallback itself) need a way to reset it between cases.
 exports.__clearNearbyCacheForTests = () => nearbyCache.clear();
 exports.__NEARBY_CACHE_TTL_MS = NEARBY_CACHE_TTL_MS;
+exports.__OVERPASS_URLS = OVERPASS_URLS;

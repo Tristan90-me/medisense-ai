@@ -7,7 +7,7 @@ const request = require('supertest');
 const app = require('../app');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { __clearNearbyCacheForTests, __NEARBY_CACHE_TTL_MS } = require('../controllers/careFinderController');
+const { __clearNearbyCacheForTests, __NEARBY_CACHE_TTL_MS, __OVERPASS_URLS } = require('../controllers/careFinderController');
 
 async function createUser(overrides = {}) {
   return User.create({
@@ -202,7 +202,7 @@ describe('Care Finder API', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  test('a persistent Overpass failure retries once before giving up', async () => {
+  test('a failure on every Overpass mirror gives up only after trying all of them, in order', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
     const user = await createUser();
     const token = tokenFor(user);
@@ -213,10 +213,11 @@ describe('Care Finder API', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(502);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(__OVERPASS_URLS.length);
+    expect(global.fetch.mock.calls.map(([url]) => url)).toEqual(__OVERPASS_URLS);
   });
 
-  test('a failure on the first attempt but success on the retry still returns results', async () => {
+  test('a failure on the first mirror but success on the next still returns results', async () => {
     global.fetch = jest.fn()
       .mockRejectedValueOnce(new Error('transient blip'))
       .mockResolvedValueOnce({ ok: true, json: async () => ({ elements: MOCK_ELEMENTS }) });
@@ -231,6 +232,24 @@ describe('Care Finder API', () => {
     expect(res.status).toBe(200);
     expect(res.body.facilities).toHaveLength(3);
     expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('a 429 (rate-limited) from the first mirror moves straight to the next, no same-mirror retry', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 429, statusText: 'Too Many Requests', json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ elements: MOCK_ELEMENTS }) });
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const res = await request(app)
+      .get('/api/care-finder/nearby')
+      .query({ lat: ORIGIN.lat, lng: ORIGIN.lng })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.facilities).toHaveLength(3);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls.map(([url]) => url)).toEqual(__OVERPASS_URLS.slice(0, 2));
   });
 
   test('when Overpass is down but a stale (expired) cache entry exists, it is served instead of a hard 502', async () => {
