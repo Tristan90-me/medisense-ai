@@ -15,10 +15,13 @@ const app = express();
 // helmet() treatment below.
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// CLIENT_URL may be a single origin or a comma-separated list (e.g. a
+// production custom domain plus its vercel.app deployment URL) — trimmed
+// and filtered so stray whitespace/empty entries never slip into the list.
 const allowedOrigins = [
   'http://localhost:5173',
-  process.env.CLIENT_URL,
-].filter(Boolean);
+  ...(process.env.CLIENT_URL || '').split(',').map((s) => s.trim()).filter(Boolean),
+];
 
 app.use(helmet());
 app.use(cors({
