@@ -147,8 +147,8 @@ export default function AdminSettings() {
             <tr className="border-b bg-muted/40">
               <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Name</TableHead>
               <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Email</TableHead>
-              <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Invited</TableHead>
-              <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Expires</TableHead>
+              <TableHead className="hidden h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:table-cell">Invited</TableHead>
+              <TableHead className="hidden h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:table-cell">Expires</TableHead>
               <TableHead className="h-auto py-2.5" />
             </tr>
           </TableHeader>
@@ -180,10 +180,10 @@ export default function AdminSettings() {
                 >
                   <TableCell className="text-[13px] font-medium text-foreground">{inv.name}</TableCell>
                   <TableCell className="text-[13px] text-muted-foreground">{inv.email}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                     {new Date(inv.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                     {new Date(inv.adminInviteExpires).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </TableCell>
                   <TableCell>
@@ -214,7 +214,7 @@ export default function AdminSettings() {
             <tr className="border-b bg-muted/40">
               <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Name</TableHead>
               <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Email</TableHead>
-              <TableHead className="h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Joined</TableHead>
+              <TableHead className="hidden h-auto py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:table-cell">Joined</TableHead>
             </tr>
           </TableHeader>
           <TableBody>
@@ -239,7 +239,7 @@ export default function AdminSettings() {
                 <tr key={a._id} className={ROW_CLASS}>
                   <TableCell className="text-[13px] font-medium text-foreground">{a.name}</TableCell>
                   <TableCell className="text-[13px] text-muted-foreground">{a.email}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                     {new Date(a.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </TableCell>
                 </tr>

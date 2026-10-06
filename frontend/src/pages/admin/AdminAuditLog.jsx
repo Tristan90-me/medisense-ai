@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import adminApi from '../../api/adminApi';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,12 +75,12 @@ export default function AdminAuditLog() {
         </div>
 
         {showFilters && (
-          <form onSubmit={applyFilter} className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-card p-3">
+          <form onSubmit={applyFilter} className="flex flex-col gap-2.5 rounded-xl border border-border/70 bg-card p-3 sm:flex-row sm:items-center">
             <Input
               value={actionFilter}
               onChange={(e) => setActionFilter(e.target.value)}
               placeholder="Filter by action, e.g. admin.invite"
-              className="h-8 max-w-[260px] text-xs"
+              className="h-8 w-full text-xs sm:max-w-[260px]"
             />
             <Button type="submit" size="sm" variant="outline">Apply</Button>
             {actionFilter && (
@@ -95,7 +95,47 @@ export default function AdminAuditLog() {
           </form>
         )}
 
-        <Card className="gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none">
+        {/* Phone: card list. Tablet/desktop: table. */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {logs.length === 0 && !loading ? (
+            <Card className="rounded-[14px] border-dashed border-border/70 py-0 shadow-none">
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                No audit log entries{actionFilter ? ` matching "${actionFilter}"` : ''}.
+              </CardContent>
+            </Card>
+          ) : loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-[112px] rounded-[14px]" />
+            ))
+          ) : logs.map((log) => (
+            <Card key={log._id} className="gap-0 rounded-[14px] border-border/70 py-0 shadow-none">
+              <CardContent className="flex flex-col gap-2 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-foreground">{log.actor?.name || 'Unknown'}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{log.actor?.email || ''}</p>
+                  </div>
+                  <Badge className={`shrink-0 ${ACTION_BADGE[log.action] || 'bg-muted text-muted-foreground'}`}>
+                    {log.action}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Target: {log.targetType || '—'}
+                </p>
+                {log.metadata && Object.keys(log.metadata).length > 0 && (
+                  <p className="break-all text-[11px] text-muted-foreground">{JSON.stringify(log.metadata)}</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  {new Date(log.createdAt).toLocaleString('en-GB', {
+                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="hidden gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none sm:block">
           <Table>
             <TableHeader>
               <tr className="border-b bg-muted/40">

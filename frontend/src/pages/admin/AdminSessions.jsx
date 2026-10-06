@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import adminApi from '../../api/adminApi';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -83,7 +83,7 @@ export default function AdminSessions() {
           {showFilters && (
             <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border/70 bg-card p-3">
               <Select value={filters.severity || 'all'} onValueChange={(v) => setFilter('severity', v === 'all' ? '' : v)}>
-                <SelectTrigger size="sm" className="text-xs">
+                <SelectTrigger size="sm" className="w-full text-xs sm:w-auto">
                   <SelectValue placeholder="All severities" />
                 </SelectTrigger>
                 <SelectContent>
@@ -95,7 +95,7 @@ export default function AdminSessions() {
               </Select>
 
               <Select value={filters.status || 'all'} onValueChange={(v) => setFilter('status', v === 'all' ? '' : v)}>
-                <SelectTrigger size="sm" className="text-xs">
+                <SelectTrigger size="sm" className="w-full text-xs sm:w-auto">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -127,7 +127,43 @@ export default function AdminSessions() {
         </div>
 
         {/* Table */}
-        <Card className="gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none">
+        {/* Phone: card list. Tablet/desktop: table. */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-[112px] rounded-[14px]" />
+            ))
+          ) : sessions.map((s) => (
+            <Card key={s._id} className="gap-0 rounded-[14px] border-border/70 py-0 shadow-none">
+              <CardContent className="flex flex-col gap-2.5 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-foreground">{s.user?.name || 'Unknown'}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{s.user?.email || ''}</p>
+                  </div>
+                  <Badge className={`shrink-0 ${STATUS_BADGE[s.status] || 'bg-muted text-muted-foreground'}`}>
+                    {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {s.severityLevel ? (
+                    <Badge className={SEVERITY_BADGE[s.severityLevel] || 'bg-muted text-muted-foreground'}>
+                      {s.severityLevel}
+                      {s.severityScore ? ` (${s.severityScore}/10)` : ''}
+                    </Badge>
+                  ) : <span>No severity</span>}
+                  {s.emergencyDetected && <AlertTriangle size={14} className="text-severity-high" />}
+                  <span>{s.mode === 'full' ? 'Full Assessment' : 'Quick Check'}</span>
+                  <span>
+                    {new Date(s.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="hidden gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none sm:block">
           <Table>
             <TableHeader>
               <tr className="border-b bg-muted/40">

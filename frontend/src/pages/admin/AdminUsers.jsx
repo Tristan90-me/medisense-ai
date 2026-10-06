@@ -7,7 +7,7 @@ import {
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import adminApi from '../../api/adminApi';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -85,8 +85,68 @@ export default function AdminUsers() {
           />
         </div>
 
+        {/* Phone: card list. Tablet/desktop: table. */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-[104px] rounded-[14px]" />
+            ))
+          ) : users.map((u) => (
+            <Card key={u._id} className="gap-0 rounded-[14px] border-border/70 py-0 shadow-none">
+              <CardContent className="flex flex-col gap-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <User size={14} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-foreground">{u.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{u.email}</p>
+                    </div>
+                  </div>
+                  <Badge className={u.isActive
+                    ? 'shrink-0 bg-severity-low-bg text-severity-low-fg'
+                    : 'shrink-0 bg-severity-high-bg text-severity-high-fg'}>
+                    {u.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Badge className={u.role === 'admin'
+                      ? 'bg-severity-moderate-bg text-severity-moderate-fg'
+                      : 'bg-primary/10 text-primary'}>
+                      {u.role}
+                    </Badge>
+                  </span>
+                  <span>{u.sessionCount} sessions</span>
+                  <span className="flex items-center gap-1">
+                    {u.isEmailVerified
+                      ? <CheckCircle size={13} className="text-severity-low" />
+                      : <XCircle size={13} className="text-severity-high" />}
+                    {u.isEmailVerified ? 'Verified' : 'Unverified'}
+                  </span>
+                  <span>Joined {new Date(u.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                </div>
+                {u.role !== 'admin' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={`w-full rounded-full ${u.isActive
+                      ? 'bg-severity-high-bg text-severity-high-fg hover:bg-severity-high-bg/70'
+                      : 'bg-severity-low-bg text-severity-low-fg hover:bg-severity-low-bg/70'}`}
+                    onClick={() => setConfirmUser(u)}
+                    disabled={toggling === u._id}
+                  >
+                    {toggling === u._id ? '...' : u.isActive ? 'Deactivate' : 'Activate'}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
         {/* Table */}
-        <Card className="gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none">
+        <Card className="hidden gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none sm:block">
           <Table>
             <TableHeader>
               <tr className="border-b bg-muted/40">

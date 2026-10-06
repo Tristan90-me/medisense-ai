@@ -6,7 +6,7 @@ import {
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import adminApi from '../../api/adminApi';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -107,9 +107,9 @@ export default function AdminFlaggedSessions() {
         </div>
 
         {showFilters && (
-          <div className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-card p-3">
+          <div className="flex flex-col gap-2.5 rounded-xl border border-border/70 bg-card p-3 sm:flex-row sm:items-center">
             <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
-              <SelectTrigger size="sm" className="w-[160px] text-xs">
+              <SelectTrigger size="sm" className="w-full text-xs sm:w-[160px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -121,7 +121,57 @@ export default function AdminFlaggedSessions() {
           </div>
         )}
 
-        <Card className="gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none">
+        {/* Phone: card list. Tablet/desktop: table. */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-[128px] rounded-[14px]" />
+            ))
+          ) : sessions.length === 0 ? (
+            <Card className="rounded-[14px] border-dashed border-border/70 py-0 shadow-none">
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                No flagged sessions {status === 'pending' ? 'pending review' : status === 'reviewed' ? 'reviewed yet' : ''}.
+              </CardContent>
+            </Card>
+          ) : sessions.map((s) => (
+            <Card key={s._id} className="gap-0 rounded-[14px] border-border/70 py-0 shadow-none">
+              <CardContent className="flex flex-col gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium text-foreground">{s.user?.name || 'Unknown'}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">{s.user?.email || ''}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 text-xs text-foreground">
+                    {s.emergencyDetected ? <AlertTriangle size={13} className="text-severity-high" /> : <ShieldAlert size={13} className="text-severity-critical" />}
+                    {flagReason(s)}
+                  </span>
+                  {s.severityLevel && (
+                    <Badge className={SEVERITY_BADGE[s.severityLevel] || 'bg-muted text-muted-foreground'}>
+                      {s.severityLevel}
+                    </Badge>
+                  )}
+                  {s.reviewedAt ? (
+                    <Badge className="gap-1 bg-severity-low-bg text-severity-low-fg">
+                      <CheckCircle2 size={11} /> Reviewed
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-severity-moderate-bg text-severity-moderate-fg">Pending</Badge>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(s.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => openReview(s)}>
+                    {s.reviewedAt ? 'View' : 'Review'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="hidden gap-0 overflow-hidden rounded-[14px] border-border/70 py-0 shadow-none sm:block">
           <Table>
             <TableHeader>
               <tr className="border-b bg-muted/40">
@@ -212,7 +262,7 @@ export default function AdminFlaggedSessions() {
       </div>
 
       <Dialog open={!!reviewing} onOpenChange={(open) => !open && setReviewing(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
           {reviewing && (
             <>
               <DialogHeader>
