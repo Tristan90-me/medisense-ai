@@ -6,13 +6,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import useVoice from '../../hooks/useVoice';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog, DialogContent, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import {
   X, Send, Mic, MicOff, Bot,
   Zap, ClipboardList, Trash2, LogIn, UserPlus,
 } from 'lucide-react';
 
 // The open/close trigger for this panel lives in FloatingMenu now (the
-// combined theme+chat floating cluster) — this component only renders the
-// panel itself, driven by `isOpen` from AIContext.
+// combined theme+chat floating cluster). The panel is a modal Dialog, so it
+// gets the same dark backdrop, tap-outside-to-close and Escape behaviour as
+// announcements. The backdrop sits below the FloatingMenu (z-1002) so that
+// button stays tappable and can close the chat too.
 export default function AIAssistant() {
   const { isOpen, messages, loading, suggestions, closeChat, sendMessage, clearMessages } = useAI();
   const { user, isAuthenticated } = useAuth();
@@ -56,77 +61,76 @@ export default function AIAssistant() {
   };
 
   return (
-    <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.97 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed bottom-24 right-5 z-[998] flex h-[min(600px,calc(100vh-140px))] w-[min(380px,calc(100vw-40px))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Bot size={14} />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">MediSense Assistant</p>
-                  <p className="text-[11px] text-severity-low">● Health AI</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                {isAuthenticated && (
-                  <>
-                    <Button variant="ghost" size="icon-sm" onClick={() => setShowModeSelect((p) => !p)} title="Start a session">
-                      <Zap size={15} />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={clearMessages} title="Clear chat">
-                      <Trash2 size={15} />
-                    </Button>
-                  </>
-                )}
-                <Button variant="ghost" size="icon-sm" onClick={closeChat}>
-                  <X size={15} />
-                </Button>
-              </div>
-            </div>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) closeChat(); }}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[1000]"
+        className="fixed bottom-24 right-5 top-auto left-auto z-[1001] flex h-[min(600px,calc(100dvh-140px))] w-[min(380px,calc(100vw-40px))] max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-lg sm:max-w-none"
+      >
+        <DialogTitle className="sr-only">MediSense Assistant</DialogTitle>
+        <DialogDescription className="sr-only">Chat with the MediSense health assistant</DialogDescription>
 
-            {!isAuthenticated ? (
-              /* Guest gate — stops here rather than letting a signed-out
-                 visitor type into a chat that will only fail once they hit
-                 send; POST /api/ai/chat already requires auth server-side,
-                 this just avoids wasting their effort finding that out. */
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Bot size={20} />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">Sign in to chat</p>
-                  <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                    Create a free account or sign in to talk with your health assistant.
-                  </p>
-                </div>
-                <div className="mt-1 flex flex-col items-center gap-2">
-                  <Button
-                    onClick={() => handleAuthNavigate('/login')}
-                    className="rounded-full px-5 py-2 text-[13px]"
-                  >
-                    <LogIn size={14} /> Sign In
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleAuthNavigate('/register')}
-                    className="rounded-full px-5 py-2 text-[13px]"
-                  >
-                    <UserPlus size={14} /> Sign Up
-                  </Button>
-                </div>
-              </div>
-            ) : (
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Bot size={14} />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-foreground">MediSense Assistant</p>
+              <p className="text-[11px] text-severity-low">● Health AI</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            {isAuthenticated && (
               <>
+                <Button variant="ghost" size="icon-sm" onClick={() => setShowModeSelect((p) => !p)} title="Start a session">
+                  <Zap size={15} />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={clearMessages} title="Clear chat">
+                  <Trash2 size={15} />
+                </Button>
+              </>
+            )}
+            <Button variant="ghost" size="icon-sm" onClick={closeChat} aria-label="Close assistant">
+              <X size={15} />
+            </Button>
+          </div>
+        </div>
+
+        {!isAuthenticated ? (
+          /* Guest gate — stops here rather than letting a signed-out
+             visitor type into a chat that will only fail once they hit
+             send; POST /api/ai/chat already requires auth server-side,
+             this just avoids wasting their effort finding that out. */
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Bot size={20} />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-foreground">Sign in to chat</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                Create a free account or sign in to talk with your health assistant.
+              </p>
+            </div>
+            <div className="mt-1 flex flex-col items-center gap-2">
+              <Button
+                onClick={() => handleAuthNavigate('/login')}
+                className="rounded-full px-5 py-2 text-[13px]"
+              >
+                <LogIn size={14} /> Sign In
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAuthNavigate('/register')}
+                className="rounded-full px-5 py-2 text-[13px]"
+              >
+                <UserPlus size={14} /> Sign Up
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
             {/* Mode select dropdown */}
             <AnimatePresence>
               {showModeSelect && isAuthenticated && (
@@ -242,11 +246,9 @@ export default function AIAssistant() {
                 <Send size={14} />
               </Button>
             </div>
-              </>
-            )}
-          </motion.div>
+          </>
         )}
-      </AnimatePresence>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

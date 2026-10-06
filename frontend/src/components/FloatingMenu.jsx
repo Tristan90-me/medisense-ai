@@ -46,7 +46,7 @@ export default function FloatingMenu() {
   };
 
   return (
-    <div className={`fixed right-5 z-[999] flex flex-col items-end gap-3 ${isRaised ? 'bottom-20' : 'bottom-20 lg:bottom-5'}`}>
+    <div className={`pointer-events-auto fixed right-5 z-[1002] flex flex-col items-end gap-3 ${isRaised ? 'bottom-20' : 'bottom-20 lg:bottom-5'}`}>
       <AnimatePresence>
         {expanded && (
           <motion.div
