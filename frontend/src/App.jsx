@@ -61,14 +61,25 @@ const RouteFallback = () => (
 );
 
 // ─── Consumer route guards ──────────────────────────────────────────────────
+// Full-screen flows that hide the phone bottom bar (see MobileNav), so they
+// don't reserve space for it.
+const BOTTOM_BAR_EXEMPT_ROUTES = ['/session', '/onboarding'];
+
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       Loading...
     </div>
   );
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  const reservesBottomBar = !BOTTOM_BAR_EXEMPT_ROUTES.includes(pathname);
+  return (
+    <div className={reservesBottomBar ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0' : undefined}>
+      {children}
+    </div>
+  );
 };
 
 const PublicRoute = ({ children }) => {

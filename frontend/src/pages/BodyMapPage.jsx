@@ -73,7 +73,7 @@ export default function BodyMapPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background pb-16 sm:h-dvh lg:pb-0">
+    <div className="flex min-h-dvh flex-col bg-background sm:h-[calc(100dvh-4rem)] lg:h-dvh">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
         <button
