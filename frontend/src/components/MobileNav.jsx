@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MoreHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../context/AuthContext';
+import { useUiStore } from '../store/uiStore';
 import { PRIMARY_NAV, SECONDARY_NAV } from './appNav';
 
 // Full-screen flows that own the bottom of the viewport (the chat input bar)
@@ -14,7 +15,8 @@ const HIDDEN_ON_ROUTES = ['/session', '/onboarding'];
 export default function MobileNav() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const [moreOpen, setMoreOpen] = useState(false);
+  const moreOpen = useUiStore((s) => s.isMoreOpen);
+  const setMoreOpen = useUiStore((s) => s.setMoreOpen);
 
   useEffect(() => { setMoreOpen(false); }, [location.pathname]);
 

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, MessageCircle, Sun, Moon, Monitor } from 'lucide-react';
 import useTheme from '../hooks/useTheme';
 import { useAI } from '../context/AIContext';
 import { useAuth } from '../context/AuthContext';
+import { useUiStore } from '../store/uiStore';
 
 const THEME_ORDER = ['light', 'dark', 'system'];
 const THEME_ICON = { light: Sun, dark: Moon, system: Monitor };
@@ -30,7 +31,25 @@ export default function FloatingMenu() {
   const { preference, cycleTheme } = useTheme();
   const { isOpen: chatOpen, toggleChat, emergency } = useAI();
   const { isAuthenticated } = useAuth();
+  const isMoreOpen = useUiStore((s) => s.isMoreOpen);
   const location = useLocation();
+  const rootRef = useRef(null);
+
+  // Tapping anywhere outside the cluster, or pressing Escape, collapses it.
+  // pointerdown (not click) so the tap still reaches whatever was underneath.
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const onPointerDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setExpanded(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setExpanded(false); };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [expanded]);
 
   if (HIDDEN_ON_ROUTES.includes(location.pathname)) return null;
   const isRaised = RAISED_ON_ROUTES.includes(location.pathname);
@@ -57,7 +76,7 @@ export default function FloatingMenu() {
   // On phones the open assistant covers this corner (its Send button sits
   // there), so the button steps aside until the chat closes.
   return (
-    <div className={`pointer-events-auto fixed z-[1002] flex-col items-end gap-3 ${chatOpen ? 'hidden lg:flex' : 'flex'} ${positionClasses}`}>
+    <div ref={rootRef} className={`pointer-events-auto fixed z-[1002] flex-col items-end gap-3 ${chatOpen || isMoreOpen ? 'hidden lg:flex' : 'flex'} ${positionClasses}`}>
       <AnimatePresence>
         {expanded && (
           <motion.div
