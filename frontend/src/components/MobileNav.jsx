@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MoreHorizontal, X } from 'lucide-react';
@@ -36,22 +36,24 @@ export default function MobileNav() {
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-[998] flex h-16 items-stretch border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
-        {PRIMARY_NAV.map((item) => {
+        {PRIMARY_NAV.map((item, index) => {
           const Icon = item.icon;
           const active = isActive(item.to);
           return (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors',
-                active ? 'text-primary' : 'text-muted-foreground',
-              )}
-            >
-              <Icon size={20} />
-              <span className="truncate">{item.shortLabel}</span>
-            </Link>
+            <Fragment key={item.to}>
+              {index === 3 && <div aria-hidden="true" className="w-14 shrink-0" />}
+              <Link
+                to={item.to}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors',
+                  active ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                <Icon size={20} />
+                <span className="truncate">{item.shortLabel}</span>
+              </Link>
+            </Fragment>
           );
         })}
         <button

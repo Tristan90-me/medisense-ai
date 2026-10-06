@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, MessageCircle, Sun, Moon, Monitor } from 'lucide-react';
 import useTheme from '../hooks/useTheme';
 import { useAI } from '../context/AIContext';
+import { useAuth } from '../context/AuthContext';
 
 const THEME_ORDER = ['light', 'dark', 'system'];
 const THEME_ICON = { light: Sun, dark: Moon, system: Monitor };
@@ -28,6 +29,7 @@ export default function FloatingMenu() {
   const [expanded, setExpanded] = useState(false);
   const { preference, cycleTheme } = useTheme();
   const { isOpen: chatOpen, toggleChat, emergency } = useAI();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
 
   if (HIDDEN_ON_ROUTES.includes(location.pathname)) return null;
@@ -45,8 +47,17 @@ export default function FloatingMenu() {
     show: { opacity: 1, y: 0, scale: 1 },
   };
 
+  // Signed-in phones: the button sits in the middle of the bottom bar (the
+  // bar leaves a gap for it), so it never covers page content. Signed-out
+  // visitors have no bar, so the button stays bottom-right on every screen.
+  const positionClasses = isAuthenticated
+    ? `left-1/2 w-14 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] lg:left-auto lg:right-5 lg:w-auto lg:translate-x-0 ${isRaised ? 'lg:bottom-20' : 'lg:bottom-5'}`
+    : `right-5 ${isRaised ? 'bottom-20' : 'bottom-5'}`;
+
+  // On phones the open assistant covers this corner (its Send button sits
+  // there), so the button steps aside until the chat closes.
   return (
-    <div className={`pointer-events-auto fixed right-5 z-[1002] flex flex-col items-end gap-3 ${isRaised ? 'bottom-20' : 'bottom-20 lg:bottom-5'}`}>
+    <div className={`pointer-events-auto fixed z-[1002] flex-col items-end gap-3 ${chatOpen ? 'hidden lg:flex' : 'flex'} ${positionClasses}`}>
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -58,7 +69,7 @@ export default function FloatingMenu() {
           >
             {/* Theme control */}
             <motion.div variants={itemVariants} transition={{ duration: 0.18 }} className="flex items-center gap-2.5">
-              <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-foreground shadow-md">
+              <span className="whitespace-nowrap rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-foreground shadow-md">
                 {THEME_LABEL[preference]}
               </span>
               <button
@@ -84,7 +95,7 @@ export default function FloatingMenu() {
 
             {/* Chat control */}
             <motion.div variants={itemVariants} transition={{ duration: 0.18 }} className="flex items-center gap-2.5">
-              <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-foreground shadow-md">
+              <span className="whitespace-nowrap rounded-full bg-ink px-3 py-1.5 text-xs font-medium text-ink-foreground shadow-md">
                 {chatOpen ? 'Close chat' : 'Health assistant'}
               </span>
               <button
