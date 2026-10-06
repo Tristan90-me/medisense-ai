@@ -8,6 +8,7 @@ import { SessionProvider } from './context/SessionContext';
 import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 import AIAssistant from './components/AIAssistant/AIAssistant';
 import FloatingMenu from './components/FloatingMenu';
+import MobileNav from './components/MobileNav';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallPrompt from './components/InstallPrompt';
 
@@ -146,6 +147,7 @@ function ConsumerApp() {
             </Suspense>
             <AIAssistant />
             <FloatingMenu />
+            <MobileNav />
             <InstallPrompt />
           </ErrorBoundary>
         </SessionProvider>

@@ -20,10 +20,10 @@ import {
 import { cn } from '@/lib/utils';
 import {
   Activity, Map, Zap, ClipboardList,
-  LogOut, History, TrendingUp,
-  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, Users2, PhoneCall, Settings, Pill, Trophy, Camera, MapPin, Bell, Megaphone,
-  LayoutDashboard,
+  LogOut,
+  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, Users2, PhoneCall, Settings, Trophy, Camera, Bell, Megaphone,
 } from 'lucide-react';
+import { PRIMARY_NAV } from '../components/appNav';
 
 // localStorage key tracking the newest announcement (by sentAt) the user has
 // viewed — deliberately a lightweight MVP simplification (no push/read-receipt
@@ -52,18 +52,6 @@ const severityBadgeClasses = {
   High: 'bg-severity-high-bg text-severity-high-fg',
   Critical: 'bg-severity-critical-bg text-severity-critical-fg',
 };
-
-// Desktop-only sidebar (lg:+) — the mobile/tablet view below that breakpoint
-// keeps today's header pattern unchanged. A curated core set of
-// destinations, not every page: the rest stay reachable via the secondary
-// nav grid in the main content, matching the reviewed design preview.
-const SIDEBAR_NAV = [
-  { label: 'Dashboard', icon: LayoutDashboard, to: '/dashboard' },
-  { label: 'Sessions', icon: History, to: '/history' },
-  { label: 'Health Stats', icon: TrendingUp, to: '/health-stats' },
-  { label: 'Medications', icon: Pill, to: '/medications' },
-  { label: 'Care Finder', icon: MapPin, to: '/care-finder' },
-];
 
 // Lightweight, display-only banding for the health-score KPI pill — not an
 // authoritative scale (HealthScoreAchievements.jsx doesn't define one
@@ -290,7 +278,7 @@ export default function Dashboard() {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1">
-          {SIDEBAR_NAV.map((item) => {
+          {PRIMARY_NAV.map((item) => {
             const active = item.to === '/dashboard';
             const Icon = item.icon;
             return (

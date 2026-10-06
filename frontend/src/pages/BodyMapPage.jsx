@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Activity, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,10 +13,18 @@ export default function BodyMapPage() {
   const [selected, setSelected] = useState(null);
   const [side, setSide] = useState('front');
   const [recentSymptoms, setRecentSymptoms] = useState([]);
+  const panelRef = useRef(null);
 
   const handleSelect = (region) => {
     setSelected(region === selected ? null : region);
   };
+
+  // On phones the symptom panel sits below the body diagram, so a tap would
+  // otherwise leave the list off-screen — bring it into view.
+  useEffect(() => {
+    if (!selected || window.matchMedia('(min-width: 640px)').matches) return;
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [selected]);
 
   const handleSideToggle = (s) => {
     setSide(s);
@@ -65,7 +73,7 @@ export default function BodyMapPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex min-h-dvh flex-col bg-background pb-16 sm:h-dvh lg:pb-0">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
         <button
@@ -131,7 +139,7 @@ export default function BodyMapPage() {
       </AnimatePresence>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col overflow-hidden sm:flex-row">
+      <div className="flex flex-1 flex-col sm:flex-row sm:overflow-hidden">
         {/* Left — body map. Wider than before (was sm:w-60) — 18 regions
             need more room per-region than the previous 8 to stay
             comfortably tappable, especially on touch. */}
@@ -145,7 +153,7 @@ export default function BodyMapPage() {
         </div>
 
         {/* Right — symptom panel */}
-        <div className="min-h-[300px] flex-1 overflow-hidden">
+        <div ref={panelRef} className="min-h-[300px] flex-1 sm:overflow-hidden">
           <AnimatePresence mode="wait" initial={false}>
             {selected ? (
               <motion.div

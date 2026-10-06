@@ -165,7 +165,8 @@ export default function PhotoLog() {
   const [customBodyRegion, setCustomBodyRegion] = useState('');
   const [dependentChoice, setDependentChoice] = useState(SELF_VALUE);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   const [detailPhoto, setDetailPhoto] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -203,7 +204,8 @@ export default function PhotoLog() {
     setBodyRegionSelect(NONE_REGION_VALUE);
     setCustomBodyRegion('');
     setDependentChoice(scopedDependentId || SELF_VALUE);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
   };
 
   const openUpload = () => {
@@ -400,21 +402,35 @@ export default function PhotoLog() {
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
+              {/* Two inputs: `capture` forces the camera, so the gallery/files
+                  picker needs its own input without it. */}
               <input
-                ref={fileInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 capture="environment"
                 onChange={onFileChange}
                 className="hidden"
               />
-              <div className="flex items-center gap-2.5">
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={onFileChange}
+                className="hidden"
+              />
+              <div className="flex flex-wrap items-center gap-2.5">
                 <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}>
-                  <Button type="button" size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()} className="gap-1.5">
-                    <Upload size={14} /> Choose file
+                  <Button type="button" size="sm" variant="secondary" onClick={() => cameraInputRef.current?.click()} className="gap-1.5">
+                    <Camera size={14} /> Take photo
                   </Button>
                 </motion.div>
-                <span className="truncate text-xs text-muted-foreground">
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => galleryInputRef.current?.click()} className="gap-1.5">
+                    <Upload size={14} /> Choose from gallery
+                  </Button>
+                </motion.div>
+                <span className="w-full truncate text-xs text-muted-foreground">
                   {file ? file.name : 'No file chosen'}
                 </span>
               </div>
