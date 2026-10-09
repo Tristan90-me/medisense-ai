@@ -17,6 +17,8 @@ describe('parseAIResponse', () => {
       symptoms: null,
       diagnosis: null,
       suggestions: [],
+      progress: null,
+      widget: null,
     });
   });
 
@@ -174,6 +176,30 @@ describe('parseAIResponse', () => {
       seekCareUrgency: 'monitor',
     });
     expect(result.text).toBe('x y');
+  });
+
+  test('[PROGRESS:{...}] is parsed into an object and stripped from text', () => {
+    const raw = 'What else is bothering you? [PROGRESS:{"phase":"symptoms"}]';
+    const result = parseAIResponse(raw);
+
+    expect(result.progress).toEqual({ phase: 'symptoms' });
+    expect(result.text).toBe('What else is bothering you?');
+  });
+
+  test('[WIDGET:{...}] is parsed into an object and stripped from text', () => {
+    const raw = 'On a scale of 1 to 10, how bad is the pain? [WIDGET:{"type":"pain_scale"}]';
+    const result = parseAIResponse(raw);
+
+    expect(result.widget).toEqual({ type: 'pain_scale' });
+    expect(result.text).toBe('On a scale of 1 to 10, how bad is the pain?');
+  });
+
+  test('malformed JSON inside [PROGRESS:...] does not throw: field stays null, tag text is still stripped', () => {
+    expect(() => parseAIResponse('Hi [PROGRESS:{phase:severity,}] there')).not.toThrow();
+
+    const result = parseAIResponse('Hi [PROGRESS:{phase:severity,}] there');
+    expect(result.progress).toBeNull();
+    expect(result.text).toBe('Hi there');
   });
 
   test('multiple tags including a realistic nested DIAGNOSIS all parse correctly together', () => {

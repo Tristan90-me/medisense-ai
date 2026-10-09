@@ -88,6 +88,13 @@ const sessionSchema = new mongoose.Schema(
       topPredictions: [{ condition: String, probability: Number, _id: false }],
     },
     summary: String,
+    // Last [PROGRESS:{"phase":...}] tag seen from the AI — restores the
+    // SessionChat progress bar's position on resume rather than starting
+    // blank. One of "symptoms" | "severity" | "history" | "risk" |
+    // "assessment"; not validated against an enum since the phase set
+    // differs by mode (quick vs full) and this is a display hint, not a
+    // field anything else depends on being correct.
+    lastProgressPhase: { type: String, default: null },
   },
   { timestamps: true }
 );

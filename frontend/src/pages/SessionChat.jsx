@@ -11,10 +11,11 @@ import { linkPhotoSession } from '../api/photoLog.api';
 import SessionSummary from '../components/SessionSummary';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert, MapPin, Cpu,
+  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert, MapPin, Cpu, Check,
 } from 'lucide-react';
 
 // seekCareUrgency levels that warrant an in-person-care nudge — self-care
@@ -28,6 +29,21 @@ const SEVERITY_CLASSES = {
   Critical: 'bg-severity-critical-bg text-severity-critical-fg',
 };
 
+// Ordered phase lists the backend's [PROGRESS:{"phase":...}] tag reports
+// against — the LLM only names a phase; the step number/fraction shown to
+// the user is always derived here, never trusted from the model directly.
+const PHASES = {
+  quick: ['symptoms', 'severity', 'assessment'],
+  full: ['symptoms', 'severity', 'history', 'risk', 'assessment'],
+};
+const PHASE_LABELS = {
+  symptoms: 'Symptoms',
+  severity: 'Severity',
+  history: 'Medical History',
+  risk: 'Risk Factors',
+  assessment: 'Assessment',
+};
+
 export default function SessionChat() {
   const { user } = useAuth();
   const { setActiveSession } = useSession();
@@ -37,6 +53,7 @@ export default function SessionChat() {
   const preloadedSymptoms = searchParams.get('symptoms');
   const dependentId = searchParams.get('dependent');
   const photoId = searchParams.get('photoId');
+  const currentPhases = PHASES[mode] || PHASES.quick;
 
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -49,6 +66,8 @@ export default function SessionChat() {
   const [mlClassification, setMlClassification] = useState(null);
   const [diagnosis, setDiagnosis] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [phaseIndex, setPhaseIndex] = useState(-1);
+  const [activeWidget, setActiveWidget] = useState(null);
   const [emergency, setEmergency] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [emergencyContacts, setEmergencyContacts] = useState([]);
@@ -111,6 +130,10 @@ export default function SessionChat() {
           if (s.mlClassification?.condition) setMlClassification(s.mlClassification);
           if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
           if (s.emergencyDetected) setEmergency(true);
+          if (s.lastProgressPhase) {
+            const idx = currentPhases.indexOf(s.lastProgressPhase);
+            if (idx !== -1) setPhaseIndex(idx);
+          }
         } else {
           const greeting = {
             role: 'assistant',
@@ -150,6 +173,7 @@ export default function SessionChat() {
     setInput('');
     voice.clearTranscript();
     setSuggestions([]);
+    setActiveWidget(null);
 
     const userMsg = { role: 'user', content };
     setMessages((prev) => [...prev, userMsg]);
@@ -198,6 +222,14 @@ export default function SessionChat() {
         if (event.mlClassification?.condition) setMlClassification(event.mlClassification);
         if (event.diagnosis) setDiagnosis(event.diagnosis);
         if (event.suggestions?.length) setSuggestions(event.suggestions);
+        if (event.progress?.phase) {
+          const idx = currentPhases.indexOf(event.progress.phase);
+          // Never let a noisy/earlier phase classification move the bar
+          // backward — holding position is far less confusing than a
+          // progress bar that visibly rewinds.
+          if (idx !== -1) setPhaseIndex((prev) => Math.max(prev, idx));
+        }
+        if (event.widget) setActiveWidget(event.widget);
         if (event.sessionStatus === 'completed') {
           setSession((s) => ({ ...s, status: 'completed' }));
         }
@@ -358,6 +390,29 @@ export default function SessionChat() {
         </div>
       </div>
 
+      {/* Assessment progress — only once the AI has actually started
+          asking (no bar during the opening greeting), and hidden again
+          once the diagnosis has landed rather than sitting at 100%. */}
+      {phaseIndex >= 0 && session?.status !== 'completed' && (
+        <div className="border-b border-border bg-card px-4 py-2.5">
+          <Progress value={((phaseIndex + 1) / currentPhases.length) * 100} className="h-1.5" />
+          <div className="mt-1.5 flex items-center justify-between gap-1">
+            {currentPhases.map((p, i) => (
+              <span
+                key={p}
+                className={cn(
+                  'flex items-center gap-1 text-[10px] font-medium',
+                  i < phaseIndex ? 'text-primary' : i === phaseIndex ? 'text-foreground' : 'text-muted-foreground'
+                )}
+              >
+                {i < phaseIndex && <Check size={10} />}
+                {PHASE_LABELS[p]}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((msg, i) => (
@@ -415,6 +470,26 @@ export default function SessionChat() {
                 {s}
               </button>
             ))}
+          </div>
+        )}
+
+        {!loading && activeWidget?.type === 'pain_scale' && (
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="grid grid-cols-5 gap-1.5">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setActiveWidget(null); sendMessage(`My pain level is ${n}/10.`); }}
+                  className="rounded-lg border border-primary/30 bg-primary/5 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span>1 = Very mild</span>
+              <span>10 = Worst pain imaginable</span>
+            </div>
           </div>
         )}
 

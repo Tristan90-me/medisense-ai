@@ -113,6 +113,8 @@ const sendMessage = async (req, res) => {
       session.status = "completed";
     }
 
+    if (parsed.progress?.phase) session.lastProgressPhase = parsed.progress.phase;
+
     // Independent rule-based cross-check — computed from the same
     // just-updated symptom list, never from the LLM's own severity output.
     const emergencyKeywords = await getEmergencyKeywords();
@@ -142,6 +144,8 @@ const sendMessage = async (req, res) => {
       symptoms: parsed.symptoms,
       diagnosis: parsed.diagnosis,
       suggestions: parsed.suggestions,
+      progress: parsed.progress,
+      widget: parsed.widget,
       sessionStatus: session.status,
       ruleBasedTriage,
       severityMismatch: session.severityMismatch,
@@ -223,6 +227,8 @@ const sendMessageStream = async (req, res) => {
       session.status = "completed";
     }
 
+    if (parsed.progress?.phase) session.lastProgressPhase = parsed.progress.phase;
+
     const emergencyKeywords = await getEmergencyKeywords();
     const ruleBasedTriage = computeTriageScore(session.symptoms, healthProfile, emergencyKeywords);
     session.ruleBasedTriage = ruleBasedTriage;
@@ -249,6 +255,8 @@ const sendMessageStream = async (req, res) => {
       symptoms: parsed.symptoms,
       diagnosis: parsed.diagnosis,
       suggestions: parsed.suggestions,
+      progress: parsed.progress,
+      widget: parsed.widget,
       sessionStatus: session.status,
       ruleBasedTriage,
       severityMismatch: session.severityMismatch,

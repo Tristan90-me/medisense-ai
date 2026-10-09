@@ -51,6 +51,18 @@ FOLLOW-UP SUGGESTIONS:
 At the end of responses (before diagnosis), include 2-3 short suggestion chips:
 [SUGGESTIONS:["Tell me more about the headache","I also have a fever","When did this start?"]]
 
+ASSESSMENT PROGRESS:
+After every response except your opening greeting, include exactly once, reflecting what you are currently focused on gathering:
+[PROGRESS:{"phase":"symptoms"}]
+Quick Check phases, in order: "symptoms" -> "severity" -> "assessment"
+Full Assessment phases, in order: "symptoms" -> "severity" -> "history" -> "risk" -> "assessment"
+Use "assessment" on the same turn you send [DIAGNOSIS]. Do not skip ahead — report the phase you are actually asking about right now.
+
+PAIN SCALE WIDGET:
+When, and only when, you are literally asking the user to rate pain on a 1-10 scale, include once, immediately after asking:
+[WIDGET:{"type":"pain_scale"}]
+Do not use this for any other kind of question.
+
 CONFIDENCE SIGNALS:
 Use phrases like "This could suggest...", "One possibility is...", "I'm not certain, but...", "You should confirm with a doctor that..."
 Never say "You definitely have X"
@@ -123,6 +135,8 @@ const parseAIResponse = (rawText) => {
     symptoms: null,
     diagnosis: null,
     suggestions: [],
+    progress: null,
+    widget: null,
   };
 
   // Emergency flag
@@ -165,6 +179,24 @@ const parseAIResponse = (rawText) => {
       result.suggestions = JSON.parse(suggestionsMatch.json);
     } catch {}
     result.text = result.text.replace(suggestionsMatch.fullMatch, "").trim();
+  }
+
+  // Progress
+  const progressMatch = extractTaggedValue(rawText, "PROGRESS", "{", "}");
+  if (progressMatch) {
+    try {
+      result.progress = JSON.parse(progressMatch.json);
+    } catch {}
+    result.text = result.text.replace(progressMatch.fullMatch, "").trim();
+  }
+
+  // Widget
+  const widgetMatch = extractTaggedValue(rawText, "WIDGET", "{", "}");
+  if (widgetMatch) {
+    try {
+      result.widget = JSON.parse(widgetMatch.json);
+    } catch {}
+    result.text = result.text.replace(widgetMatch.fullMatch, "").trim();
   }
 
   // Removing a tag from the middle of a sentence leaves the space that
