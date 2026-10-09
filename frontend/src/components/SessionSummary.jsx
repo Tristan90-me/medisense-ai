@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Printer, Activity, MapPin } from 'lucide-react';
+import { X, Printer, Activity } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
-// seekCareUrgency levels that warrant an in-person-care nudge — self-care
-// and monitor don't need it.
-const CARE_FINDER_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
+import AssessmentResults from './AssessmentResults';
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg' },
@@ -71,7 +68,9 @@ function PrintableSummary({ ref, session, summary, severity, diagnosis }) {
   );
 }
 
-export default function SessionSummary({ session, messages, severity, diagnosis, onClose }) {
+export default function SessionSummary({
+  session, messages, severity, diagnosis, symptoms, ruleBasedTriage, mlClassification, onClose,
+}) {
   const navigate = useNavigate();
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(true);
@@ -155,56 +154,15 @@ export default function SessionSummary({ session, messages, severity, diagnosis,
             )}
           </div>
 
-          {/* Diagnosis */}
-          {diagnosis && (
-            <div>
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-primary">Possible Conditions</p>
-              {diagnosis.conditions?.map((c, i) => (
-                <div key={i} className="mb-2.5">
-                  <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
-                    <span>{c.name}</span>
-                    <span>{c.probability}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60"
-                      style={{ width: `${c.probability}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-              {diagnosis.seekCareUrgency && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Seek care:{' '}
-                  <strong className="capitalize text-severity-moderate-fg">
-                    {diagnosis.seekCareUrgency.replace('-', ' ')}
-                  </strong>
-                </p>
-              )}
-              {CARE_FINDER_URGENCIES.includes(diagnosis.seekCareUrgency) && (
-                <button
-                  onClick={() => { onClose(); navigate('/care-finder'); }}
-                  className="mt-2.5 flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                >
-                  <MapPin size={13} /> Find nearby care
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Recommendations */}
-          {diagnosis?.recommendations?.length > 0 && (
-            <div>
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-primary">Recommendations</p>
-              <ul className="flex flex-col gap-1.5">
-                {diagnosis.recommendations.map((r, i) => (
-                  <li key={i} className="relative pl-3 text-[13px] text-muted-foreground">
-                    <span className="absolute left-0 text-muted-foreground">–</span> {r}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* Diagnosis (includes its own recommendations + find-care + red-flag sections) */}
+          <AssessmentResults
+            diagnosis={diagnosis}
+            symptoms={symptoms}
+            ruleBasedTriage={ruleBasedTriage}
+            mlClassification={mlClassification}
+            onFindCare={() => { onClose(); navigate(diagnosis.seekCareUrgency === 'emergency' ? '/care-finder?urgency=emergency' : '/care-finder'); }}
+            className="border-none bg-transparent p-0"
+          />
 
           {/* Disclaimer */}
           <p className="border-t border-border/70 pt-3.5 text-[11px] leading-relaxed text-muted-foreground">

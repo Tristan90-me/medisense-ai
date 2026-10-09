@@ -9,18 +9,16 @@ import { streamSessionMessage } from '../api/stream';
 import { listEmergencyContacts } from '../api/emergencyContacts.api';
 import { linkPhotoSession } from '../api/photoLog.api';
 import SessionSummary from '../components/SessionSummary';
+import MLClassifierCard from '../components/MLClassifierCard';
+import AssessmentResults from '../components/AssessmentResults';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert, MapPin, Cpu, Check,
+  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert, Check,
 } from 'lucide-react';
-
-// seekCareUrgency levels that warrant an in-person-care nudge — self-care
-// and monitor don't need it.
-const CARE_FINDER_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 
 const SEVERITY_CLASSES = {
   Low: 'bg-severity-low-bg text-severity-low-fg',
@@ -56,6 +54,7 @@ export default function SessionChat() {
   const currentPhases = PHASES[mode] || PHASES.quick;
 
   const [session, setSession] = useState(null);
+  const [sessionSymptoms, setSessionSymptoms] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -129,6 +128,7 @@ export default function SessionChat() {
           if (s.severityMismatch) setSeverityMismatch(true);
           if (s.mlClassification?.condition) setMlClassification(s.mlClassification);
           if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
+          if (s.symptoms?.length) setSessionSymptoms(s.symptoms);
           if (s.emergencyDetected) setEmergency(true);
           if (s.lastProgressPhase) {
             const idx = currentPhases.indexOf(s.lastProgressPhase);
@@ -221,6 +221,7 @@ export default function SessionChat() {
         if (event.severityMismatch) setSeverityMismatch(true);
         if (event.mlClassification?.condition) setMlClassification(event.mlClassification);
         if (event.diagnosis) setDiagnosis(event.diagnosis);
+        if (event.sessionSymptoms?.length) setSessionSymptoms(event.sessionSymptoms);
         if (event.suggestions?.length) setSuggestions(event.suggestions);
         if (event.progress?.phase) {
           const idx = currentPhases.indexOf(event.progress.phase);
@@ -276,14 +277,21 @@ export default function SessionChat() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="flex items-center gap-3 overflow-hidden bg-destructive px-4 py-2.5 text-sm text-destructive-foreground"
+            className="flex flex-col gap-2 overflow-hidden bg-destructive px-4 py-2.5 text-sm text-destructive-foreground"
           >
-            <AlertTriangle size={18} className="shrink-0 animate-pulse" />
-            <span className="flex-1">⚠️ Emergency symptoms detected. Please seek immediate medical attention.</span>
-            <a href="tel:112" className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
-              <Phone size={14} /> Call 112
-            </a>
-            <button onClick={() => setEmergency(false)} className="shrink-0 text-lg leading-none">✕</button>
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={18} className="shrink-0 animate-pulse" />
+              <span className="flex-1">⚠️ Emergency symptoms detected. Please seek immediate medical attention.</span>
+              <a href="tel:112" className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
+                <Phone size={14} /> Call 112
+              </a>
+            </div>
+            <button
+              onClick={() => setEmergency(false)}
+              className="self-start rounded-full border border-white/40 px-3 py-1 text-xs font-medium text-destructive-foreground/90 transition-colors hover:bg-white/10"
+            >
+              I understand this warning — Continue assessment
+            </button>
           </motion.div>
         )}
 
@@ -494,83 +502,20 @@ export default function SessionChat() {
         )}
 
         {mlClassification?.condition && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-border bg-card p-4"
-          >
-            <div className="mb-2 flex items-center gap-1.5">
-              <Cpu size={14} className="text-secondary" />
-              <p className="text-sm font-bold text-foreground">ML Symptom Classifier</p>
-            </div>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              A locally-run statistical model's independent read on your reported symptoms —
-              a separate signal from the AI conversation above, for comparison.
-            </p>
-            <div className="space-y-3">
-              {mlClassification.topPredictions?.slice(0, 3).map((p, i) => (
-                <div key={i}>
-                  <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
-                    <span>{p.condition}</span>
-                    <span>{Math.round(p.probability * 100)}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${p.probability * 100}%` }}
-                      transition={{ duration: 0.5, ease: 'easeOut' }}
-                      className="h-full rounded-full bg-secondary"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <MLClassifierCard mlClassification={mlClassification} />
           </motion.div>
         )}
 
         {diagnosis && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-border bg-card p-4"
-          >
-            <p className="mb-2 text-sm font-bold text-foreground">Assessment Results</p>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Care needed: <strong className="capitalize text-foreground">{diagnosis.seekCareUrgency?.replace('-', ' ')}</strong>
-            </p>
-            {CARE_FINDER_URGENCIES.includes(diagnosis.seekCareUrgency) && (
-              <button
-                onClick={() => navigate('/care-finder')}
-                className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                <MapPin size={13} /> Find nearby care
-              </button>
-            )}
-            <div className="space-y-3">
-              {diagnosis.conditions?.slice(0, 3).map((c, i) => (
-                <div key={i}>
-                  <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
-                    <span>{c.name}</span>
-                    <span>{c.probability}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${c.probability}%` }}
-                      transition={{ duration: 0.5, ease: 'easeOut' }}
-                      className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            {diagnosis.recommendations?.length > 0 && (
-              <ul className="mt-3 space-y-1">
-                {diagnosis.recommendations.map((r, i) => (
-                  <li key={i} className="text-xs text-muted-foreground">- {r}</li>
-                ))}
-              </ul>
-            )}
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <AssessmentResults
+              diagnosis={diagnosis}
+              symptoms={sessionSymptoms}
+              ruleBasedTriage={ruleBasedTriage}
+              mlClassification={mlClassification}
+              onFindCare={() => navigate(diagnosis.seekCareUrgency === 'emergency' ? '/care-finder?urgency=emergency' : '/care-finder')}
+            />
           </motion.div>
         )}
 
@@ -647,6 +592,9 @@ export default function SessionChat() {
           messages={messages}
           severity={severity}
           diagnosis={diagnosis}
+          symptoms={sessionSymptoms}
+          ruleBasedTriage={ruleBasedTriage}
+          mlClassification={mlClassification}
           onClose={() => setShowSummary(false)}
         />
       )}

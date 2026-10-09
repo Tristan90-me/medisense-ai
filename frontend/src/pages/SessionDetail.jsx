@@ -2,16 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Activity, AlertTriangle,
-  Phone, Printer, Loader, MapPin, Cpu,
+  Phone, Printer, Loader,
 } from 'lucide-react';
-
-// seekCareUrgency levels that warrant an in-person-care nudge — self-care
-// and monitor don't need it.
-const CARE_FINDER_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 import { useReactToPrint } from 'react-to-print';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import MLClassifierCard from '../components/MLClassifierCard';
+import AssessmentResults from '../components/AssessmentResults';
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg' },
@@ -218,74 +216,16 @@ export default function SessionDetail() {
 
         {/* ML classifier — a third, independent signal alongside the LLM's
             own diagnosis below and the clinical-triage badge above. */}
-        {session.mlClassification?.condition && (
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="mb-1 flex items-center gap-1.5">
-              <Cpu size={13} className="text-secondary" />
-              <p className="text-[11px] font-bold uppercase tracking-wide text-primary">ML Symptom Classifier</p>
-            </div>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              A locally-run statistical model's independent read on the reported symptoms.
-            </p>
-            {session.mlClassification.topPredictions?.slice(0, 3).map((p, i) => (
-              <div key={i} className="mb-3 last:mb-0">
-                <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
-                  <span>{p.condition}</span>
-                  <span>{Math.round(p.probability * 100)}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-secondary" style={{ width: `${p.probability * 100}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <MLClassifierCard mlClassification={session.mlClassification} compact />
 
         {/* Diagnosis */}
-        {session.diagnosis?.conditions?.length > 0 && (
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-primary">Assessment</p>
-            {session.diagnosis.conditions.map((c, i) => (
-              <div key={i} className="mb-3">
-                <div className="mb-1 flex justify-between text-[13px] font-medium text-foreground">
-                  <span>{c.name}</span>
-                  <span>{c.probability}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60"
-                    style={{ width: `${c.probability}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-            {session.diagnosis.seekCareUrgency && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Care urgency:{' '}
-                <strong className="capitalize text-severity-moderate-fg">
-                  {session.diagnosis.seekCareUrgency.replace('-', ' ')}
-                </strong>
-              </p>
-            )}
-            {CARE_FINDER_URGENCIES.includes(session.diagnosis.seekCareUrgency) && (
-              <button
-                onClick={() => navigate('/care-finder')}
-                className="mt-2.5 flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                <MapPin size={13} /> Find nearby care
-              </button>
-            )}
-            {session.diagnosis.recommendations?.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-1">
-                {session.diagnosis.recommendations.map((r, i) => (
-                  <li key={i} className="relative pl-3 text-xs text-muted-foreground">
-                    <span className="absolute left-0 text-muted-foreground">–</span> {r}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+        <AssessmentResults
+          diagnosis={session.diagnosis}
+          symptoms={session.symptoms}
+          ruleBasedTriage={session.ruleBasedTriage}
+          mlClassification={session.mlClassification}
+          onFindCare={() => navigate(session.diagnosis.seekCareUrgency === 'emergency' ? '/care-finder?urgency=emergency' : '/care-finder')}
+        />
 
         {/* Conversation */}
         {session.messages?.length > 0 && (

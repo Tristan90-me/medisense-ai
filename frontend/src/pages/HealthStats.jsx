@@ -7,6 +7,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import api from '../api/axios';
+import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -37,10 +38,21 @@ const STAT_CARD_CLASSES = {
   emergencies: { border: 'border-t-severity-high', value: 'text-severity-high-fg' },
 };
 
+// How far back each range chip looks; 'all' has no cutoff.
+const RANGE_DAYS = { '7': 7, '30': 30, '90': 90, all: null };
+const RANGE_LABELS = { '7': '7 days', '30': '30 days', '90': '90 days', all: 'All time' };
+// Full sentence fragments for prose contexts — RANGE_LABELS alone doesn't
+// grammatically fit "in the ___" for every value (e.g. "in the all time").
+const PERIOD_PHRASE = { '7': 'in the last 7 days', '30': 'in the last 30 days', '90': 'in the last 90 days', all: 'so far' };
+
 export default function HealthStats() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState('all');
+  // Captured once at mount — a stable "now" for the age filter below avoids
+  // calling Date.now() directly in the render body on every re-render.
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const fetch = async () => {
@@ -53,18 +65,26 @@ export default function HealthStats() {
     fetch();
   }, []);
 
+  // ── Time filter ──────────────────────────────────────────────────────
+  // getSessions (backend) always returns newest-first — no need to re-sort
+  // here, only to filter by age.
+  const cutoffDays = RANGE_DAYS[range];
+  const inRange = cutoffDays == null
+    ? sessions
+    : sessions.filter((s) => now - new Date(s.createdAt).getTime() <= cutoffDays * 86400000);
+
   // ── Derived stats ────────────────────────────────────────────────────
-  const completed = sessions.filter(s => s.status === 'completed');
-  const withSeverity = sessions.filter(s => s.severityScore);
+  const completed = inRange.filter(s => s.status === 'completed');
+  const withSeverity = inRange.filter(s => s.severityScore);
   const avgSeverity = withSeverity.length
     ? (withSeverity.reduce((a, s) => a + s.severityScore, 0) / withSeverity.length).toFixed(1)
     : 'N/A';
 
-  const emergencyCount = sessions.filter(s => s.emergencyDetected).length;
+  const emergencyCount = inRange.filter(s => s.emergencyDetected).length;
 
   // Symptom frequency
   const symptomMap = {};
-  sessions.forEach(s => {
+  inRange.forEach(s => {
     s.symptoms?.forEach(sym => {
       symptomMap[sym.name] = (symptomMap[sym.name] || 0) + 1;
     });
@@ -73,16 +93,31 @@ export default function HealthStats() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
 
-  // Timeline data for chart (last 10 sessions with severity)
-  const chartData = withSeverity
-    .slice()
-    .reverse()
+  // Timeline data for chart (last 10 sessions with severity, oldest first)
+  const chronological = withSeverity.slice().reverse();
+  const chartData = chronological
     .slice(-10)
     .map((s) => ({
       name: new Date(s.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       severity: s.severityScore,
       level: s.severityLevel,
     }));
+
+  // ── Storytelling summary ─────────────────────────────────────────────
+  // First-half vs second-half average severity, in chronological order —
+  // a simple, honest trend signal from data this app actually tracks
+  // (severity + symptom frequency), not a fabricated metric.
+  let trend = null;
+  if (chronological.length >= 2) {
+    const mid = Math.ceil(chronological.length / 2);
+    const firstHalf = chronological.slice(0, mid);
+    const secondHalf = chronological.slice(mid).length ? chronological.slice(mid) : firstHalf;
+    const avgOf = (arr) => arr.reduce((a, s) => a + s.severityScore, 0) / arr.length;
+    const delta = avgOf(secondHalf) - avgOf(firstHalf);
+    if (delta > 0.75) trend = { word: 'trending up', className: 'text-severity-high-fg' };
+    else if (delta < -0.75) trend = { word: 'trending down', className: 'text-severity-low-fg' };
+    else trend = { word: 'holding steady', className: 'text-muted-foreground' };
+  }
 
   const severityDotColor = (level) => CHART_COLORS.severity[level] || CHART_COLORS.primary;
 
@@ -106,7 +141,7 @@ export default function HealthStats() {
   };
 
   const statCards = [
-    { key: 'total', label: 'Total Sessions', value: sessions.length },
+    { key: 'total', label: 'Total Sessions', value: inRange.length },
     { key: 'completed', label: 'Completed', value: completed.length },
     { key: 'avg', label: 'Avg Severity', value: avgSeverity },
     { key: 'emergencies', label: 'Emergencies', value: emergencyCount },
@@ -155,6 +190,24 @@ export default function HealthStats() {
       </div>
 
       <div className="mx-auto flex max-w-[640px] flex-col gap-4 px-4 py-5">
+        {/* Time range */}
+        <div className="flex flex-wrap gap-1.5">
+          {Object.keys(RANGE_DAYS).map((key) => (
+            <button
+              key={key}
+              onClick={() => setRange(key)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                range === key
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-foreground hover:bg-accent'
+              )}
+            >
+              {RANGE_LABELS[key]}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
           <>
             <div className="grid grid-cols-2 gap-3">
@@ -165,8 +218,35 @@ export default function HealthStats() {
             <Skeleton className="h-[260px] rounded-[14px]" />
             <Skeleton className="h-[200px] rounded-[14px]" />
           </>
+        ) : inRange.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center text-[13px] text-muted-foreground">
+            <Activity size={28} className="text-muted-foreground/40" />
+            <p>No sessions {PERIOD_PHRASE[range]}.</p>
+          </div>
         ) : (
           <>
+            {/* Storytelling summary */}
+            <Card className="rounded-[14px] py-4 shadow-sm">
+              <CardContent className="px-4">
+                <p className="text-sm font-bold text-foreground">Your story</p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-foreground/80">
+                  You completed {completed.length} assessment{completed.length !== 1 ? 's' : ''} {PERIOD_PHRASE[range]}
+                  {withSeverity.length > 0 && <>, averaging <span className="font-semibold text-foreground">{avgSeverity}/10</span> in severity</>}
+                  {trend && (
+                    <>
+                      {' — '}
+                      <span className={cn('font-medium', trend.className)}>{trend.word}</span>
+                      {' compared to earlier in this period'}
+                    </>
+                  )}
+                  {'. '}
+                  {topSymptoms.length > 0 && (
+                    <>Your most frequently reported symptom was <span className="font-semibold text-foreground">{topSymptoms[0][0]}</span> ({topSymptoms[0][1]}x).</>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Stat cards */}
             {statsGrid}
 
@@ -220,7 +300,9 @@ export default function HealthStats() {
               <Card className="rounded-[14px] py-4 shadow-sm">
                 <CardContent className="px-4">
                   <p className="text-sm font-bold text-foreground">Most Common Symptoms</p>
-                  <p className="text-[11px] text-muted-foreground">Across all your sessions</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {range === 'all' ? 'Across all your sessions' : `In the last ${RANGE_DAYS[range]} days`}
+                  </p>
                   <div className="mt-3.5 flex flex-col gap-2.5">
                     {topSymptoms.map(([name, count], i) => {
                       const max = topSymptoms[0][1];

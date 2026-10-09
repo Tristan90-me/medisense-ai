@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -9,7 +9,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
 import {
   ArrowLeft, MapPin, Navigation, Phone, AlertTriangle, LocateFixed, SearchX,
-  Search, Crosshair, X, ExternalLink, Route,
+  Search, Crosshair, X, ExternalLink, Route, Clock,
 } from 'lucide-react';
 import { searchNearby, geocodeSearch, reverseGeocode, getDirections } from '../api/careFinder.api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -89,6 +89,13 @@ function MapViewController({ coords, route }) {
 
 export default function CareFinder() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Set when arriving via a diagnosis's "Find nearby care" CTA for an
+  // emergency-level assessment (see AssessmentResults.jsx) — biases the
+  // facility type toward hospitals and makes the urgency visually obvious,
+  // rather than presenting this the same as a routine lookup.
+  const isEmergency = searchParams.get('urgency') === 'emergency';
 
   const [coords, setCoords] = useState(null);
   const [geoStatus, setGeoStatus] = useState('pending'); // 'pending' | 'ready' | 'error'
@@ -104,7 +111,7 @@ export default function CareFinder() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [pickModeActive, setPickModeActive] = useState(false);
 
-  const [type, setType] = useState('');
+  const [type, setType] = useState(isEmergency ? 'hospital' : '');
   const [radius, setRadius] = useState(5000);
   const [facilities, setFacilities] = useState([]);
   const [facilitiesLoading, setFacilitiesLoading] = useState(false);
@@ -316,6 +323,13 @@ export default function CareFinder() {
   const nextRadius = RADIUS_STEPS[RADIUS_STEPS.indexOf(radius) + 1];
   const widenSearch = () => { if (nextRadius) setRadius(nextRadius); };
 
+  // In an emergency context, hospitals are the relevant facility regardless
+  // of which type filter is active — bubble them to the top while keeping
+  // each group's existing distance order (Array#sort is stable).
+  const displayFacilities = isEmergency
+    ? [...facilities].sort((a, b) => (a.type === 'hospital' ? 0 : 1) - (b.type === 'hospital' ? 0 : 1))
+    : facilities;
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
@@ -328,15 +342,22 @@ export default function CareFinder() {
             <ArrowLeft size={18} />
           </button>
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent-foreground">
-              <MapPin size={16} />
+            <div
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-full',
+                isEmergency ? 'bg-destructive/10 text-destructive' : 'bg-accent/10 text-accent-foreground'
+              )}
+            >
+              {isEmergency ? <AlertTriangle size={16} /> : <MapPin size={16} />}
             </div>
             <div>
-              <p className="font-heading text-sm font-semibold text-foreground">Care Finder</p>
+              <p className="font-heading text-sm font-semibold text-foreground">
+                {isEmergency ? 'Nearest Emergency Care' : 'Care Finder'}
+              </p>
               <p className="text-[11px] text-muted-foreground">
                 {geoStatus === 'ready' && !facilitiesLoading
                   ? `${facilities.length} nearby within ${radius / 1000} km`
-                  : 'Nearby hospitals, clinics & pharmacies'}
+                  : isEmergency ? 'Hospitals near you, closest first' : 'Nearby hospitals, clinics & pharmacies'}
               </p>
             </div>
           </div>
@@ -344,6 +365,19 @@ export default function CareFinder() {
       </div>
 
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-3.5 px-4 py-4">
+        {isEmergency && (
+          <div className="flex items-center gap-2.5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] text-destructive">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span className="flex-1">If this is life-threatening, call for immediate help now.</span>
+            <a
+              href="tel:112"
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-destructive px-3 py-1 text-xs text-destructive-foreground no-underline"
+            >
+              <Phone size={12} /> 112
+            </a>
+          </div>
+        )}
+
         {geoStatus === 'pending' && (
           <div className="flex flex-col gap-3.5">
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
@@ -488,7 +522,7 @@ export default function CareFinder() {
                   <Popup>{locationDisplayLabel}</Popup>
                 </Marker>
 
-                {facilities.map((f) => (
+                {displayFacilities.map((f) => (
                   <Marker
                     key={f.id}
                     position={[f.lat, f.lng]}
@@ -501,6 +535,7 @@ export default function CareFinder() {
                         <p className="text-neutral-500">
                           {TYPE_LABELS[f.type] || f.type} · {f.distanceKm} km
                         </p>
+                        {f.openingHours && <p className="text-neutral-500">🕒 {f.openingHours}</p>}
                         <button
                           onClick={() => handleGetDirections(f)}
                           className="mt-1 text-left font-medium text-blue-600 hover:underline"
@@ -604,7 +639,7 @@ export default function CareFinder() {
             {!route && !routeLoading && !routeError && !facilitiesLoading && !facilitiesError && facilities.length > 0 && (
               <AnimatePresence mode="popLayout">
                 <motion.div layout className="flex flex-col gap-2.5">
-                  {facilities.map((f, i) => (
+                  {displayFacilities.map((f, i) => (
                     <motion.div
                       key={f.id}
                       layout
@@ -637,6 +672,12 @@ export default function CareFinder() {
                               <span className="truncate text-[11px] text-muted-foreground">{f.address}</span>
                             )}
                           </div>
+                          {f.openingHours && (
+                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <Clock size={11} className="shrink-0" />
+                              <span className="truncate">{f.openingHours}</span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 pt-0.5">
                             {f.phone && (
                               <a

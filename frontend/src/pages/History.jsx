@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Activity, ChevronRight,
-  Clock, CheckCircle, AlertCircle,
+  Clock, CheckCircle, AlertCircle, Search, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg', dot: 'bg-severity-low' },
@@ -19,12 +21,35 @@ const SEVERITY_CLASSES = {
 const modeLabel = { quick: 'Quick Check', full: 'Full Assessment' };
 
 const FILTERS = ['all', 'active', 'completed'];
+const SEVERITY_FILTERS = ['all', 'Low', 'Moderate', 'High', 'Critical'];
+const SEVERITY_ORDER = { Critical: 4, High: 3, Moderate: 2, Low: 1 };
+const RANGE_DAYS = { all: null, '7': 7, '30': 30, '90': 90 };
+const RANGE_LABELS = { all: 'All time', '7': 'Last 7 days', '30': 'Last 30 days', '90': 'Last 90 days' };
+const SORTS = {
+  newest: { label: 'Newest first', cmp: (a, b) => new Date(b.createdAt) - new Date(a.createdAt) },
+  oldest: { label: 'Oldest first', cmp: (a, b) => new Date(a.createdAt) - new Date(b.createdAt) },
+  'severity-high': {
+    label: 'Severity: high to low',
+    cmp: (a, b) => (SEVERITY_ORDER[b.severityLevel] || 0) - (SEVERITY_ORDER[a.severityLevel] || 0),
+  },
+  'severity-low': {
+    label: 'Severity: low to high',
+    cmp: (a, b) => (SEVERITY_ORDER[a.severityLevel] || 0) - (SEVERITY_ORDER[b.severityLevel] || 0),
+  },
+};
 
 export default function History() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [range, setRange] = useState('all');
+  const [sort, setSort] = useState('newest');
+  const [search, setSearch] = useState('');
+  // Captured once at mount — a stable "now" for the age filter below avoids
+  // calling Date.now() directly in the render body on every re-render.
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const fetch = async () => {
@@ -40,10 +65,20 @@ export default function History() {
     fetch();
   }, []);
 
-  const filtered = sessions.filter((s) => {
-    if (filter === 'all') return true;
-    return s.status === filter;
-  });
+  const cutoffDays = RANGE_DAYS[range];
+  const searchQuery = search.trim().toLowerCase();
+
+  const filtered = sessions
+    .filter((s) => filter === 'all' || s.status === filter)
+    .filter((s) => severityFilter === 'all' || s.severityLevel === severityFilter)
+    .filter((s) => cutoffDays == null || now - new Date(s.createdAt).getTime() <= cutoffDays * 86400000)
+    .filter((s) => {
+      if (!searchQuery) return true;
+      const modeText = (modeLabel[s.mode] || s.mode || '').toLowerCase();
+      const symptomText = (s.symptoms || []).map((sym) => sym.name.toLowerCase()).join(' ');
+      return modeText.includes(searchQuery) || symptomText.includes(searchQuery);
+    })
+    .sort(SORTS[sort].cmp);
 
   const formatDate = (d) => {
     const date = new Date(d);
@@ -72,7 +107,9 @@ export default function History() {
           <div>
             <p className="font-heading text-sm font-semibold text-foreground">Session History</p>
             <p className="text-[11px] text-muted-foreground">
-              {sessions.length} session{sessions.length !== 1 ? 's' : ''} total
+              {filtered.length === sessions.length
+                ? `${sessions.length} session${sessions.length !== 1 ? 's' : ''} total`
+                : `${filtered.length} of ${sessions.length} sessions`}
             </p>
           </div>
         </div>
@@ -96,6 +133,69 @@ export default function History() {
         ))}
       </div>
 
+      {/* Search + filters */}
+      <div className="flex flex-col gap-2.5 border-b border-border bg-card px-4 py-3">
+        <div className="relative">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by symptom or assessment type..."
+            className="pl-8 pr-8"
+            aria-label="Search sessions"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {SEVERITY_FILTERS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSeverityFilter(s)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-[11px] font-medium transition-colors',
+                severityFilter === s
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:bg-accent'
+              )}
+            >
+              {s === 'all' ? 'Any severity' : s}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <Select value={range} onValueChange={setRange}>
+            <SelectTrigger className="h-8 flex-1 text-xs" aria-label="Filter by time range">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.keys(RANGE_DAYS).map((key) => (
+                <SelectItem key={key} value={key}>{RANGE_LABELS[key]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="h-8 flex-1 text-xs" aria-label="Sort sessions">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(SORTS).map(([key, { label }]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* List */}
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-2 px-4 py-3">
         {loading && (
@@ -112,7 +212,7 @@ export default function History() {
           </div>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {!loading && filtered.length === 0 && sessions.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
             <p className="text-4xl">🩺</p>
             <p className="text-base font-semibold text-foreground">No sessions yet</p>
@@ -125,6 +225,16 @@ export default function History() {
             >
               Start your first check
             </button>
+          </div>
+        )}
+
+        {!loading && filtered.length === 0 && sessions.length > 0 && (
+          <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+            <p className="text-4xl">🔍</p>
+            <p className="text-base font-semibold text-foreground">No matching sessions</p>
+            <p className="max-w-[280px] text-sm leading-relaxed text-muted-foreground">
+              Try a different search term, or widen your filters.
+            </p>
           </div>
         )}
 
