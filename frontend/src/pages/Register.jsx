@@ -37,8 +37,8 @@ export default function Register() {
 
   return (
     <AuthShell
-      sideTitle="Get a doctor-style read on your symptoms."
-      sideSubtitle="Create your free account and MediSense will ask the right follow-up questions, weigh your health profile, and give you a ranked differential — available anytime."
+      sideTitle="Get a structured read on your symptoms."
+      sideSubtitle="Create your free account and MediSense will ask the right follow-up questions, weigh your health profile, and generate a structured, AI-assisted symptom assessment — available anytime."
       sidePoints={SIDE_POINTS}
     >
       <AnimatePresence mode="wait">

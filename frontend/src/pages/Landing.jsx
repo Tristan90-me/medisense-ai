@@ -170,7 +170,7 @@ const STEPS = [
 ];
 
 const FEATURES = [
-  { icon: <Brain size={22} />, bg: 'bg-primary/10', color: 'text-primary', title: 'Differential diagnosis', desc: 'Multiple possible conditions ranked by probability, not just one guess.' },
+  { icon: <Brain size={22} />, bg: 'bg-primary/10', color: 'text-primary', title: 'Possible explanations', desc: 'Multiple possible conditions ranked by probability, not just one guess.' },
   { icon: <ShieldCheck size={22} />, bg: 'bg-severity-low-bg', color: 'text-severity-low-fg', title: 'Emergency detection', desc: 'Critical symptoms trigger an immediate alert to seek emergency care.' },
   { icon: <Users size={22} />, bg: 'bg-secondary/10', color: 'text-secondary', title: 'Personalized to you', desc: 'Age, sex, weight, conditions, and family history all shape your results.' },
   { icon: <TrendingUp size={22} />, bg: 'bg-severity-moderate-bg', color: 'text-severity-moderate-fg', title: 'Symptom tracking', desc: 'See how your health changes over time with visual timelines and trends.' },
@@ -179,10 +179,10 @@ const FEATURES = [
 ];
 
 const STATS = [
-  { val: '95%', label: 'Symptom coverage across major conditions' },
+  { val: '22', label: 'Supported health conditions' },
   { val: '<2 min', label: 'Average time to a full assessment' },
   { val: '24/7', label: 'Available every day, every hour' },
-  { val: '100%', label: 'Private — your data stays yours' },
+  { val: '3', label: 'Independent diagnostic signals' },
 ];
 
 const TRUST_POINTS = [
@@ -267,7 +267,7 @@ export default function Landing() {
             </h1>
             <p className="mb-9 max-w-[480px] text-base leading-relaxed text-muted-foreground">
               MediSense asks the right follow-up questions, weighs your health profile,
-              and gives you a ranked differential — the same way a doctor thinks, available anytime.
+              and generates a structured, AI-assisted symptom assessment — available anytime.
             </p>
             <div className="mb-8 flex flex-wrap gap-4">
               <Link

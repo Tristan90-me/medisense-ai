@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const SIDE_POINTS = [
-  'A ranked differential, not just one guess',
+  'Possible explanations, not just one guess',
   'Personalized to your age, history, and conditions',
   'Emergency symptoms flagged immediately',
 ];
