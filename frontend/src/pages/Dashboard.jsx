@@ -19,11 +19,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
-  Activity, Map, Zap, ClipboardList,
+  Activity, Map, Stethoscope, ArrowRight, MessageCircle,
   LogOut,
   ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, Users2, PhoneCall, Settings, Trophy, Camera, Bell, Megaphone,
 } from 'lucide-react';
 import { PRIMARY_NAV } from '../components/appNav';
+import { useAI } from '../context/AIContext';
 
 // localStorage key tracking the newest announcement (by sentAt) the user has
 // viewed — deliberately a lightweight MVP simplification (no push/read-receipt
@@ -86,7 +87,9 @@ const formatRelativeDate = (dateStr) => {
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const { openChat } = useAI();
   const navigate = useNavigate();
+  const [checkMode, setCheckMode] = useState('quick');
 
   const [sessions, setSessions] = useState([]);
   const [sessionsError, setSessionsError] = useState(false);
@@ -202,29 +205,7 @@ export default function Dashboard() {
     { label: 'Dependents', value: dependentsCount, to: '/dependents' },
   ];
 
-  const primaryActions = [
-    {
-      icon: Zap,
-      color: 'primary',
-      title: 'Quick Check',
-      desc: '3–5 questions · Fast symptom assessment',
-      onClick: () => navigate('/session?mode=quick'),
-    },
-    {
-      icon: ClipboardList,
-      color: 'secondary',
-      title: 'Full Assessment',
-      desc: '10–15 questions · Detailed health report',
-      onClick: () => navigate('/session?mode=full'),
-    },
-    {
-      icon: Map,
-      color: 'accent',
-      title: 'Body Map',
-      desc: 'Tap where it hurts to select symptoms',
-      onClick: () => navigate('/body-map'),
-    },
-  ];
+  const recentSessions = sessions.slice(0, 3);
 
   // The remaining destinations not already promoted to the sidebar/KPI
   // strip — Health Score and Medications/Sessions/Care Finder are reachable
@@ -481,44 +462,101 @@ export default function Dashboard() {
             </motion.div>
           )}
 
-          {/* Primary actions */}
-          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Get started
-          </p>
+          {/* Primary CTA — the one dominant action on the page. Quick Check
+              and Full Assessment used to be two of three equal-weight
+              cards here; now they're a single mode toggle on one CTA, so
+              "what should I do first" has one obvious answer. */}
+          <motion.div variants={itemVariants} initial="hidden" animate="show" className="mb-2.5">
+            <Card className="overflow-hidden rounded-2xl border-primary/15 bg-gradient-to-br from-primary/[0.07] to-secondary/[0.06] py-0 shadow-sm">
+              <CardContent className="flex flex-col items-center gap-3.5 px-6 py-7 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Stethoscope size={22} />
+                </div>
+                <div>
+                  <p className="font-heading text-lg font-bold text-foreground">Start a Health Check</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">Tell MediSense what you're experiencing</p>
+                </div>
+                <div className="inline-flex rounded-full border border-border/70 bg-background p-1">
+                  <button
+                    type="button"
+                    onClick={() => setCheckMode('quick')}
+                    className={cn(
+                      'rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-colors',
+                      checkMode === 'quick' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Quick Check
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCheckMode('full')}
+                    className={cn(
+                      'rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-colors',
+                      checkMode === 'full' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Full Assessment
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {checkMode === 'quick' ? '3–5 questions · Fast symptom assessment' : '10–15 questions · Detailed health report'}
+                </p>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate(`/session?mode=${checkMode}`)}
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+                >
+                  Start {checkMode === 'quick' ? 'Quick Check' : 'Full Assessment'} <ArrowRight size={15} />
+                </motion.button>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Secondary entry points into the same assessment flow */}
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="mb-6 grid grid-cols-1 gap-2.5 lg:grid-cols-3"
+            className="mb-6 grid grid-cols-2 gap-2.5"
           >
-            {primaryActions.map((a, i) => (
-              <motion.div
-                key={i}
-                variants={itemVariants}
-                whileHover={{ scale: 1.015, y: -2 }}
-                whileTap={{ scale: 0.99 }}
+            <motion.div variants={itemVariants} whileHover={{ scale: 1.015, y: -2 }} whileTap={{ scale: 0.99 }}>
+              <Card
+                onClick={() => navigate('/body-map')}
+                className="h-full cursor-pointer rounded-2xl border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md"
               >
-                <Card
-                  onClick={a.onClick}
-                  className="h-full cursor-pointer rounded-2xl border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <CardContent className="flex items-center gap-3.5 px-[18px] py-4 lg:flex-col lg:items-start lg:gap-3">
-                    <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', colorClasses[a.color])}>
-                      <a.icon size={20} />
-                    </div>
-                    <div>
-                      <p className="mb-0.5 text-sm font-semibold text-foreground">{a.title}</p>
-                      <p className="text-xs text-muted-foreground">{a.desc}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                <CardContent className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                    <Map size={18} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-foreground">Body Map</p>
+                    <p className="text-[11px] text-muted-foreground">Tap where it hurts</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+            <motion.div variants={itemVariants} whileHover={{ scale: 1.015, y: -2 }} whileTap={{ scale: 0.99 }}>
+              <Card
+                onClick={openChat}
+                className="h-full cursor-pointer rounded-2xl border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <CardContent className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <MessageCircle size={18} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-foreground">Ask AI a question</p>
+                    <p className="text-[11px] text-muted-foreground">Open the health assistant</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           </motion.div>
 
           {/* Divider */}
           <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Your Health Data
+            Today's Health
           </p>
 
           {/* KPI strip */}
@@ -556,7 +594,68 @@ export default function Dashboard() {
             )}
           </motion.div>
 
+          {/* Recent activity — the last few check-ins, reusing the sessions
+              already fetched for the snapshot card above (no extra request). */}
+          {snapshotLoading ? (
+            <>
+              <p className="mb-2.5 mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Recent Activity
+              </p>
+              <div className="mb-6 flex flex-col gap-2">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[60px] rounded-xl" />
+                ))}
+              </div>
+            </>
+          ) : recentSessions.length > 0 && (
+            <>
+              <p className="mb-2.5 mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Recent Activity
+              </p>
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="mb-6 flex flex-col gap-2"
+              >
+                {recentSessions.map((s) => (
+                  <motion.div key={s._id} variants={itemVariants}>
+                    <Card
+                      onClick={() => navigate(`/history/${s._id}`)}
+                      className="cursor-pointer rounded-xl border-border/70 py-0 shadow-sm transition-shadow hover:shadow-md"
+                    >
+                      <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={cn(
+                              'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                              s.severityLevel ? severityBadgeClasses[s.severityLevel] : colorClasses.muted
+                            )}
+                          >
+                            <ClipboardCheck size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-foreground">
+                              {s.symptoms?.[0]?.name
+                                ? capitalize(s.symptoms[0].name)
+                                : (s.mode === 'full' ? 'Full Assessment' : 'Quick Check')}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">{formatRelativeDate(s.createdAt)}</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </>
+          )}
+
           {/* Secondary actions */}
+          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            More
+          </p>
           <motion.div
             variants={containerVariants}
             initial="hidden"

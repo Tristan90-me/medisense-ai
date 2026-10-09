@@ -18,6 +18,7 @@ export const AIProvider = ({ children }) => {
   const [currentPage, setCurrentPage] = useState('');
 
   const toggleChat = () => setIsOpen((p) => !p);
+  const openChat = () => setIsOpen(true);
   const closeChat = () => setIsOpen(false);
 
   const addMessage = useCallback((role, content) => {
@@ -66,7 +67,7 @@ export const AIProvider = ({ children }) => {
   return (
     <AIContext.Provider value={{
       isOpen, messages, loading, emergency, severity, suggestions,
-      currentPage, toggleChat, closeChat, addMessage, sendMessage,
+      currentPage, toggleChat, openChat, closeChat, addMessage, sendMessage,
       clearMessages, dismissEmergency, setCurrentPage,
     }}>
       {children}
