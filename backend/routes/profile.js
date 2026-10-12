@@ -52,6 +52,7 @@ router.get('/', protect, validate(getProfileRules), getProfile);
  *               familyHistory: { type: array, items: { type: string } }
  *               smokingStatus: { type: string, enum: [never, former, current] }
  *               alcoholUse: { type: string, enum: [none, occasional, moderate, heavy] }
+ *               privacyConsent: { type: boolean, description: When true, stamps the caller's account (not this profile) with a one-time privacyConsentAt timestamp, if not already set. }
  *     responses:
  *       200: { description: Updated health profile }
  *       400: { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }

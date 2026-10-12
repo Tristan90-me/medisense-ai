@@ -45,6 +45,7 @@ app.use('/api/photo-log', require('./routes/photoLog'));
 app.use('/api/community', require('./routes/community'));
 app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/share', require('./routes/share'));
 app.use('/api/admin/auth', require('./routes/adminAuth'));
 app.use('/api/admin', require('./routes/admin'));
 

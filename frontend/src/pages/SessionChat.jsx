@@ -14,6 +14,7 @@ import AssessmentResults from '../components/AssessmentResults';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
@@ -41,6 +42,49 @@ const PHASE_LABELS = {
   risk: 'Risk Factors',
   assessment: 'Assessment',
 };
+
+// One-time, device-local acknowledgment — same storage pattern as
+// InstallPrompt.jsx's "don't ask again" flag. Shown before any session's
+// chat UI is usable, regardless of which page linked into /session (there
+// are several: Dashboard, BodyMapPage, AIAssistant, Dependents), since this
+// component is the one place they all funnel through.
+const AI_CONSENT_KEY = 'medisense-ai-consent-seen';
+
+function AiConsentModal({ onAccept }) {
+  return (
+    <Dialog open onOpenChange={() => {}}>
+      <DialogContent
+        showCloseButton={false}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        className="rounded-2xl sm:max-w-[420px]"
+      >
+        <DialogHeader>
+          <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ShieldAlert size={20} />
+          </div>
+          <DialogTitle className="text-base font-bold text-foreground">Before you begin</DialogTitle>
+        </DialogHeader>
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          MediSense provides AI-generated health information and risk assessment. It does <span className="font-semibold text-foreground">not</span>:
+        </p>
+        <ul className="flex flex-col gap-1.5">
+          {['Diagnose disease', 'Replace a doctor', 'Prescribe treatment'].map((t) => (
+            <li key={t} className="flex items-center gap-2 text-[13px] text-foreground">
+              <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground" /> {t}
+            </li>
+          ))}
+        </ul>
+        <p className="rounded-xl bg-severity-high-bg px-3 py-2.5 text-[12.5px] font-medium leading-relaxed text-severity-high-fg">
+          If you have an emergency, contact emergency services immediately.
+        </p>
+        <Button onClick={onAccept} className="mt-1 w-full rounded-full">
+          I understand — Start assessment
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function SessionChat() {
   const { user } = useAuth();
@@ -71,6 +115,15 @@ export default function SessionChat() {
   const [showSummary, setShowSummary] = useState(false);
   const [emergencyContacts, setEmergencyContacts] = useState([]);
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(() => {
+    try {
+      return localStorage.getItem(AI_CONSENT_KEY) === '1';
+    } catch {
+      // Private-browsing / storage-blocked: don't lock the user out of the
+      // product over a storage read failing.
+      return true;
+    }
+  });
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -258,6 +311,15 @@ export default function SessionChat() {
     else voice.startListening();
   };
 
+  const handleAcceptConsent = () => {
+    try {
+      localStorage.setItem(AI_CONSENT_KEY, '1');
+    } catch {
+      // Ignore — worst case this re-prompts next session, which is safe.
+    }
+    setConsentAccepted(true);
+  };
+
   if (initializing) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-muted-foreground">
@@ -269,6 +331,8 @@ export default function SessionChat() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      {!consentAccepted && <AiConsentModal onAccept={handleAcceptConsent} />}
+
       {/* Emergency Banner */}
       <AnimatePresence>
         {emergency && (

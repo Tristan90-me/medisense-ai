@@ -29,12 +29,14 @@ const SessionDetail = lazy(() => import('./pages/SessionDetail'));
 const HealthStats = lazy(() => import('./pages/HealthStats'));
 const Dependents = lazy(() => import('./pages/Dependents'));
 const AccountSettings = lazy(() => import('./pages/AccountSettings'));
+const PrivacyCenter = lazy(() => import('./pages/PrivacyCenter'));
 const EmergencyContacts = lazy(() => import('./pages/EmergencyContacts'));
 const Medications = lazy(() => import('./pages/Medications'));
 const HealthScoreAchievements = lazy(() => import('./pages/HealthScoreAchievements'));
 const PhotoLog = lazy(() => import('./pages/PhotoLog'));
 const CareFinder = lazy(() => import('./pages/CareFinder'));
 const CommunityInsights = lazy(() => import('./pages/CommunityInsights'));
+const SharedReport = lazy(() => import('./pages/SharedReport'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const VerifyOtp = lazy(() => import('./pages/VerifyOtp'));
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
@@ -137,6 +139,7 @@ function ConsumerApp() {
                   <Route path="/register" element={<PublicRoute><PageTransition><Register /></PageTransition></PublicRoute>} />
                   <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
                   <Route path="/verify-otp" element={<PageTransition><VerifyOtp /></PageTransition>} />
+                  <Route path="/shared/:token" element={<PageTransition><SharedReport /></PageTransition>} />
                   <Route path="/onboarding" element={<PrivateRoute><PageTransition><Onboarding /></PageTransition></PrivateRoute>} />
                   <Route path="/dashboard" element={<PrivateRoute><PageTransition><Dashboard /></PageTransition></PrivateRoute>} />
                   <Route path="/session" element={<PrivateRoute><PageTransition><SessionChat /></PageTransition></PrivateRoute>} />
@@ -146,6 +149,7 @@ function ConsumerApp() {
                   <Route path="/health-stats" element={<PrivateRoute><PageTransition><HealthStats /></PageTransition></PrivateRoute>} />
                   <Route path="/dependents" element={<PrivateRoute><PageTransition><Dependents /></PageTransition></PrivateRoute>} />
                   <Route path="/account-settings" element={<PrivateRoute><PageTransition><AccountSettings /></PageTransition></PrivateRoute>} />
+                  <Route path="/privacy-center" element={<PrivateRoute><PageTransition><PrivacyCenter /></PageTransition></PrivateRoute>} />
                   <Route path="/emergency-contacts" element={<PrivateRoute><PageTransition><EmergencyContacts /></PageTransition></PrivateRoute>} />
                   <Route path="/medications" element={<PrivateRoute><PageTransition><Medications /></PageTransition></PrivateRoute>} />
                   <Route path="/health-score" element={<PrivateRoute><PageTransition><HealthScoreAchievements /></PageTransition></PrivateRoute>} />

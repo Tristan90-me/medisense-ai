@@ -62,6 +62,11 @@ describe('SessionChat', () => {
     vi.clearAllMocks();
     api.post.mockResolvedValue({ data: { session: { _id: 'sess1' }, resumed: false } });
     streamSessionMessage.mockResolvedValue(undefined);
+    // The one-time AI-assessment consent modal blocks all chat interaction
+    // until accepted — pre-accept it here so the other tests exercise chat
+    // behavior, not the consent gate. The gate itself is tested separately
+    // below with this cleared.
+    localStorage.setItem('medisense-ai-consent-seen', '1');
   });
 
   it('shows a loading state, then starts the session and renders the greeting', async () => {
@@ -118,5 +123,21 @@ describe('SessionChat', () => {
     await user.type(input, '   {Enter}');
 
     expect(streamSessionMessage).not.toHaveBeenCalled();
+  });
+
+  it('blocks the chat behind a one-time AI consent notice until accepted', async () => {
+    localStorage.removeItem('medisense-ai-consent-seen');
+    const user = userEvent.setup();
+    render(<SessionChat />);
+    await screen.findByText(/tell me what symptoms you're experiencing/i);
+
+    expect(screen.getByText(/before you begin/i)).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(/describe your symptoms/i);
+    await expect(user.type(input, 'blocked')).rejects.toThrow(/pointer-events/i);
+
+    await user.click(screen.getByRole('button', { name: /start assessment/i }));
+
+    expect(screen.queryByText(/before you begin/i)).not.toBeInTheDocument();
+    expect(localStorage.getItem('medisense-ai-consent-seen')).toBe('1');
   });
 });

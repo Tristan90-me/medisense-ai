@@ -51,7 +51,10 @@ export default function FloatingMenu() {
     };
   }, [expanded]);
 
-  if (HIDDEN_ON_ROUTES.includes(location.pathname)) return null;
+  // /shared/:token is a read-only report link meant for a healthcare
+  // professional, not a prospective sign-up — the guest AI-chat teaser this
+  // button otherwise opens for signed-out visitors doesn't belong there.
+  if (HIDDEN_ON_ROUTES.includes(location.pathname) || location.pathname.startsWith('/shared/')) return null;
   const isRaised = RAISED_ON_ROUTES.includes(location.pathname);
 
   const ThemeIcon = THEME_ICON[preference];

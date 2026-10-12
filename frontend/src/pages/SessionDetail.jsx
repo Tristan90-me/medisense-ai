@@ -2,14 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Activity, AlertTriangle,
-  Phone, Printer, Loader,
+  Phone, Printer, Loader, Download, Loader2,
 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import MLClassifierCard from '../components/MLClassifierCard';
 import AssessmentResults from '../components/AssessmentResults';
+import ShareDialog from '../components/ShareDialog';
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg' },
@@ -86,6 +88,7 @@ export default function SessionDetail() {
   const [session, setSession] = useState(null);
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(true);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const printRef = useRef(null);
 
   useEffect(() => {
@@ -110,6 +113,22 @@ export default function SessionDetail() {
     contentRef: printRef,
     documentTitle: 'MediSense AI — Session Report',
   });
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setExportingPdf(true);
+    try {
+      // Dynamically imported — jsPDF + html2canvas are ~600KB combined and
+      // only needed when this button is actually clicked, not on every
+      // visit to a session page.
+      const { downloadElementAsPdf } = await import('../utils/exportPdf');
+      await downloadElementAsPdf(printRef.current, `MediSense-Report-${id}.pdf`);
+    } catch {
+      toast.error('Failed to generate PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -148,9 +167,15 @@ export default function SessionDetail() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-full">
-          <Printer size={14} /> Print
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-full">
+            <Printer size={14} /> Print
+          </Button>
+          <Button size="sm" onClick={handleDownloadPdf} disabled={exportingPdf} className="gap-1.5 rounded-full">
+            {exportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} PDF
+          </Button>
+          {session.diagnosis?.conditions?.length > 0 && <ShareDialog sessionId={session._id} />}
+        </div>
       </div>
 
       <div className="mx-auto flex max-w-[640px] flex-col gap-4 px-4 py-5">
@@ -255,8 +280,10 @@ export default function SessionDetail() {
         </p>
       </div>
 
-      {/* Hidden printable version */}
-      <div className="hidden">
+      {/* Printable version — kept off-screen rather than display:none, since
+          the PDF export (html2canvas) needs real layout to capture, and
+          react-to-print tolerates this positioning just as well. */}
+      <div className="pointer-events-none fixed top-0 left-[-9999px]">
         <PrintableSession ref={printRef} session={session} summary={summary} />
       </div>
     </div>

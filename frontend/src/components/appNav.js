@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, History, TrendingUp, Pill, MapPin,
-  Trophy, Users, PhoneCall, Camera, Users2, Settings,
+  Trophy, Users, PhoneCall, Camera, Users2, Settings, Lock,
 } from 'lucide-react';
 
 // Core destinations shown in the desktop sidebar (lg+) and the mobile bottom
@@ -22,4 +22,5 @@ export const SECONDARY_NAV = [
   { label: 'Photo Log', icon: Camera, to: '/photo-log' },
   { label: 'Community Insights', icon: Users2, to: '/community' },
   { label: 'Account Settings', icon: Settings, to: '/account-settings' },
+  { label: 'Privacy Center', icon: Lock, to: '/privacy-center' },
 ];

@@ -10,6 +10,11 @@ const UserSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   lastActive: { type: Date, default: Date.now },
 
+  // Set once, the first time this account checks "I understand how my data
+  // is used" during onboarding — never cleared automatically, a record that
+  // consent was given, not a re-askable preference.
+  privacyConsentAt: { type: Date, default: null },
+
   // Email verification
   isEmailVerified: { type: Boolean, default: false },
   emailVerifyToken: String,

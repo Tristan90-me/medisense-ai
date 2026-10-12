@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const {
   getAccount, updateAccount, changePassword, listTrustedDevices,
-  revokeTrustedDevice, deleteAccount,
+  revokeTrustedDevice, deleteAccount, deleteHealthHistory, exportAccountData,
 } = require('../controllers/accountController');
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const {
   updateAccountRules, changePasswordRules, deleteAccountRules, deviceIdParamRules,
+  deleteHealthHistoryRules,
 } = require('../validators/accountValidators');
 
 /**
@@ -121,5 +122,45 @@ router.delete('/trusted-devices/:id', protect, validate(deviceIdParamRules), rev
  *       401: { description: Password is incorrect, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
  */
 router.delete('/', protect, validate(deleteAccountRules), deleteAccount);
+
+/**
+ * @swagger
+ * /account/health-history:
+ *   delete:
+ *     tags: [Account]
+ *     summary: Delete activity/history data without deleting the account
+ *     description: >
+ *       Password-confirmed. Hard-deletes this account's Sessions, Medications,
+ *       PhotoLogs (including the GridFS image bytes), HealthScore, and
+ *       ShareLinks — covers dependents' data too. Keeps the account itself,
+ *       HealthProfile(s), Dependents, and EmergencyContacts.
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password: { type: string }
+ *     responses:
+ *       200: { description: Health history deleted }
+ *       401: { description: Password is incorrect, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ */
+router.delete('/health-history', protect, validate(deleteHealthHistoryRules), deleteHealthHistory);
+
+/**
+ * @swagger
+ * /account/export:
+ *   get:
+ *     tags: [Account]
+ *     summary: Download all of this account's data as JSON
+ *     description: Account details, health profile(s), dependents, sessions (including message transcripts), medications, photo log metadata (not image bytes), and emergency contacts.
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: JSON file download }
+ */
+router.get('/export', protect, exportAccountData);
 
 module.exports = router;

@@ -23,4 +23,5 @@ exports.updateProfileRules = [
   body('familyHistory').optional().isArray().withMessage('familyHistory must be an array'),
   body('smokingStatus').optional({ nullable: true }).isIn(['never', 'former', 'current']).withMessage('Invalid smokingStatus'),
   body('alcoholUse').optional({ nullable: true }).isIn(['none', 'occasional', 'moderate', 'heavy']).withMessage('Invalid alcoholUse'),
+  body('privacyConsent').optional().isBoolean().withMessage('privacyConsent must be a boolean'),
 ];

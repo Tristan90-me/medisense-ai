@@ -14,6 +14,10 @@ exports.deleteAccountRules = [
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
+exports.deleteHealthHistoryRules = [
+  body('password').notEmpty().withMessage('Password is required'),
+];
+
 exports.deviceIdParamRules = [
   param('id').isMongoId().withMessage('Invalid device id'),
 ];

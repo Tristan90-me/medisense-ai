@@ -4,13 +4,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Activity, ChevronRight, ChevronLeft, ChevronDown } from 'lucide-react';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage,
 } from '@/components/ui/form';
@@ -19,6 +20,38 @@ import {
 } from '@/components/ui/select';
 
 const steps = ['Basic info', 'Body metrics', 'Medical history', 'Lifestyle'];
+
+// One short, concrete reason per step — shown behind a "Why we ask" toggle
+// rather than a flat generic line, so it actually builds trust instead of
+// reading as boilerplate.
+const WHY_WE_ASK = [
+  'Your age and biological sex help MediSense interpret some health risks more accurately — the same symptom can mean different things depending on both.',
+  'Weight and height let MediSense factor in things like BMI-related risk when relevant — they\'re never used for anything else.',
+  'Existing conditions, allergies, and medications help MediSense avoid unsafe suggestions and catch possible interactions with anything you report.',
+  'Smoking and alcohol habits are established risk factors for many of the conditions MediSense screens for, so they help sharpen its assessments.',
+];
+
+function WhyWeAsk({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-6 -mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        aria-expanded={open}
+        className="flex items-center gap-1 text-xs font-medium text-primary"
+      >
+        Why we ask
+        <ChevronDown size={12} className={cn('transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <p className="mt-1.5 rounded-xl bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
+          {text}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Light-touch validation: this is a health profile where most fields are
 // optional, so we only guard against obviously malformed input rather than
@@ -42,6 +75,7 @@ const onboardingSchema = z.object({
   familyHistory: z.string().optional(),
   smokingStatus: z.enum(['never', 'former', 'current']),
   alcoholUse: z.enum(['none', 'occasional', 'moderate', 'heavy']),
+  privacyConsent: z.boolean().refine((v) => v === true, { message: 'Required to continue' }),
 });
 
 // Fields validated before advancing past each step.
@@ -49,7 +83,7 @@ const stepFields = [
   ['dateOfBirth', 'sex', 'bloodType'],
   ['weight', 'weightUnit', 'height', 'heightUnit'],
   ['preExistingConditions', 'allergies', 'currentMedications', 'familyHistory'],
-  ['smokingStatus', 'alcoholUse'],
+  ['smokingStatus', 'alcoholUse', 'privacyConsent'],
 ];
 
 const medicalHistoryFields = [
@@ -80,6 +114,7 @@ export default function Onboarding() {
       height: '', heightUnit: 'cm', bloodType: 'unknown',
       preExistingConditions: '', allergies: '', currentMedications: '',
       familyHistory: '', smokingStatus: 'never', alcoholUse: 'none',
+      privacyConsent: false,
     },
   });
 
@@ -161,7 +196,8 @@ export default function Onboarding() {
                   {step === 0 && (
                     <>
                       <h2 className="mb-1 font-heading text-xl font-bold text-foreground">Basic information</h2>
-                      <p className="mb-6 text-sm leading-relaxed text-muted-foreground">This helps us personalize your health insights</p>
+                      <p className="mb-2 text-sm leading-relaxed text-muted-foreground">This helps us personalize your health insights</p>
+                      <WhyWeAsk text={WHY_WE_ASK[0]} />
                       <div className="space-y-4">
                         <FormField
                           control={form.control}
@@ -228,7 +264,8 @@ export default function Onboarding() {
                   {step === 1 && (
                     <>
                       <h2 className="mb-1 font-heading text-xl font-bold text-foreground">Body metrics</h2>
-                      <p className="mb-6 text-sm leading-relaxed text-muted-foreground">Used for risk stratification and health scoring</p>
+                      <p className="mb-2 text-sm leading-relaxed text-muted-foreground">Used for risk stratification and health scoring</p>
+                      <WhyWeAsk text={WHY_WE_ASK[1]} />
                       <div className="space-y-4">
                         <div className="flex items-start gap-2">
                           <FormField
@@ -309,7 +346,8 @@ export default function Onboarding() {
                   {step === 2 && (
                     <>
                       <h2 className="mb-1 font-heading text-xl font-bold text-foreground">Medical history</h2>
-                      <p className="mb-6 text-sm leading-relaxed text-muted-foreground">Separate multiple entries with commas</p>
+                      <p className="mb-2 text-sm leading-relaxed text-muted-foreground">Separate multiple entries with commas</p>
+                      <WhyWeAsk text={WHY_WE_ASK[2]} />
                       <div className="space-y-4">
                         {medicalHistoryFields.map(([name, label, placeholder]) => (
                           <FormField
@@ -334,7 +372,8 @@ export default function Onboarding() {
                   {step === 3 && (
                     <>
                       <h2 className="mb-1 font-heading text-xl font-bold text-foreground">Lifestyle</h2>
-                      <p className="mb-6 text-sm leading-relaxed text-muted-foreground">Lifestyle factors that affect your health risk</p>
+                      <p className="mb-2 text-sm leading-relaxed text-muted-foreground">Lifestyle factors that affect your health risk</p>
+                      <WhyWeAsk text={WHY_WE_ASK[3]} />
                       <div className="space-y-4">
                         <FormField
                           control={form.control}
@@ -377,6 +416,27 @@ export default function Onboarding() {
                                   <SelectItem value="heavy">Heavy</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="mt-6 rounded-xl border border-border bg-muted/40 p-3.5">
+                        <p className="mb-2.5 text-xs leading-relaxed text-muted-foreground">
+                          Your health information is sensitive. MediSense uses it only to personalize your health assessments.
+                        </p>
+                        <FormField
+                          control={form.control}
+                          name="privacyConsent"
+                          render={({ field }) => (
+                            <FormItem>
+                              <label className="flex items-start gap-2.5 text-xs text-foreground">
+                                <FormControl>
+                                  <Checkbox checked={field.value} onCheckedChange={field.onChange} className="mt-0.5" />
+                                </FormControl>
+                                I understand how my data is used
+                              </label>
                               <FormMessage />
                             </FormItem>
                           )}

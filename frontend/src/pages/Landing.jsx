@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Activity, Brain, ShieldCheck, TrendingUp, Zap, Clock, Users, Star,
   ArrowRight, CheckCircle, Lock, HeartPulse, ChevronDown,
+  User, ClipboardList, ShieldAlert, Cpu, History,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -185,6 +186,21 @@ const STATS = [
   { val: '3', label: 'Independent diagnostic signals' },
 ];
 
+// The actual engineering pipeline (aiController.js -> utils/triage.js ->
+// ml/symptomClassifier.js), not a simplified marketing version of it — this
+// section exists specifically to show the three independent signals really
+// are independent, not three names for one model's output.
+const ARCHITECTURE_STEPS = [
+  { icon: <User size={18} />, title: 'You', desc: 'Describe your symptoms in plain language — through chat or the interactive body map.' },
+  { icon: <ClipboardList size={18} />, title: 'Symptoms & Health Profile', desc: 'Extracted symptoms are combined with your age, sex, conditions, and history.' },
+  { icon: <Brain size={18} />, title: 'AI Health Assessment', desc: 'The assistant asks guided follow-up questions and proposes possible explanations.' },
+  { icon: <ShieldAlert size={18} />, title: 'Rule-Based Safety Check', desc: "An independent, keyword-based red-flag check — never derived from the AI's own output." },
+  { icon: <Cpu size={18} />, title: 'ML Symptom Classification', desc: 'A locally-run Naive Bayes classifier offers a third, independent signal.' },
+  { icon: <TrendingUp size={18} />, title: 'Risk Assessment', desc: 'All three signals combine into a severity score and care-urgency level.' },
+  { icon: <CheckCircle size={18} />, title: 'Personalized Recommendations', desc: 'Concrete next steps, tailored to what you actually reported.' },
+  { icon: <History size={18} />, title: 'Health History', desc: 'Every session is saved so patterns can be tracked over time.' },
+];
+
 const TRUST_POINTS = [
   { icon: <ShieldCheck size={22} />, title: 'Never alarmist, never dismissive', desc: 'MediSense is trained to take every symptom seriously without overstating risk — calm, clear guidance either way.' },
   { icon: <HeartPulse size={22} />, title: 'Always says when it\'s unsure', desc: 'You\'ll see confidence language like "this could suggest" rather than false certainty — and a clear nudge to see a doctor when it matters.' },
@@ -276,7 +292,7 @@ export default function Landing() {
               >
                 Check your symptoms <ArrowRight size={16} />
               </Link>
-              <Link to="/login" className="rounded-full border border-border px-7 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary">Sign in</Link>
+              <a href="#how" className="rounded-full border border-border px-7 py-3.5 text-[15px] font-medium text-foreground transition-colors hover:border-primary hover:text-primary">Explore MediSense</a>
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2.5">
               {['No appointment needed', 'Private & secure', 'Always available'].map((t, i) => (
@@ -351,6 +367,37 @@ export default function Landing() {
                 <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">{t.icon}</div>
                 <h3 className="mb-2.5 text-base font-bold text-foreground">{t.title}</h3>
                 <p className="text-[13.5px] leading-relaxed text-muted-foreground">{t.desc}</p>
+              </RevealItem>
+            ))}
+          </RevealGroup>
+        </div>
+      </section>
+
+      {/* Architecture — a more technical section than "How it works" above,
+          showing the real signal pipeline rather than the user-facing flow. */}
+      <section className="border-b border-border bg-background px-6 py-24" id="architecture">
+        <div className="mx-auto max-w-[760px]">
+          <Reveal className="mb-14 text-center">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-primary">How MediSense works</p>
+            <h2 className="text-[clamp(24px,3vw,36px)] font-extrabold tracking-tight text-foreground">
+              Real engineering, not a chat wrapper
+            </h2>
+            <p className="mx-auto mt-4 max-w-[560px] text-[14px] leading-relaxed text-muted-foreground">
+              Three independent signals — an AI assessment, a rule-based safety check, and a local ML
+              classifier — combine into every result.
+            </p>
+          </Reveal>
+          <RevealGroup className="relative flex flex-col gap-8">
+            <div className="absolute top-5 bottom-5 left-5 w-px bg-border" aria-hidden="true" />
+            {ARCHITECTURE_STEPS.map((s, i) => (
+              <RevealItem key={i} className="relative flex items-start gap-5">
+                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-primary/20 bg-card text-primary">
+                  {s.icon}
+                </div>
+                <div className="pt-1.5">
+                  <h3 className="mb-1 text-[15px] font-bold text-foreground">{s.title}</h3>
+                  <p className="text-[13px] leading-relaxed text-muted-foreground">{s.desc}</p>
+                </div>
               </RevealItem>
             ))}
           </RevealGroup>

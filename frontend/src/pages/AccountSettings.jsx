@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  ArrowLeft, Settings, Trash2, Laptop, ShieldAlert,
+  ArrowLeft, Settings, Trash2, Laptop, ShieldAlert, Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -233,6 +233,21 @@ export default function AccountSettings() {
             {/* ── Security ────────────────────────────────────────── */}
             <TabsContent value="security" className="mt-4">
               <div className="flex flex-col gap-4">
+                <Card className="rounded-2xl border-border/70 shadow-sm">
+                  <CardContent className="flex items-center justify-between gap-3 p-5">
+                    <div className="flex items-center gap-2.5">
+                      <Lock size={16} className="text-primary" />
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Privacy Center</p>
+                        <p className="text-xs text-muted-foreground">Review your data, export it, or delete your history</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/privacy-center')} className="rounded-full">
+                      Open
+                    </Button>
+                  </CardContent>
+                </Card>
+
                 <Card className="rounded-2xl border-border/70 shadow-sm">
                   <CardContent className="p-5">
                     <p className="mb-4 text-sm font-semibold text-foreground">Change password</p>

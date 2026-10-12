@@ -15,12 +15,19 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const dependent = await resolveDependentId(req.body.dependent, req.user._id);
-    const { dependent: _ignored, ...updates } = req.body;
+    const { dependent: _ignored, privacyConsent, ...updates } = req.body;
     const profile = await HealthProfile.findOneAndUpdate(
       { user: req.user._id, dependent },
       { ...updates, dependent, onboardingComplete: true },
       { returnDocument: 'after', upsert: true, runValidators: true }
     );
+    // Consent belongs to the account holder, not any one health profile —
+    // onboarding for a second dependent re-sends it, but it's only ever
+    // stamped once per account.
+    if (privacyConsent && !req.user.privacyConsentAt) {
+      req.user.privacyConsentAt = new Date();
+      await req.user.save({ validateBeforeSave: false });
+    }
     res.json({ success: true, profile });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, message: err.message });

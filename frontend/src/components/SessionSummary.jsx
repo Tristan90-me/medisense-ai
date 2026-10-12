@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Printer, Activity } from 'lucide-react';
+import { X, Printer, Activity, Download, Loader2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import AssessmentResults from './AssessmentResults';
+import ShareDialog from './ShareDialog';
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg' },
@@ -74,6 +76,7 @@ export default function SessionSummary({
   const navigate = useNavigate();
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(true);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const printRef = useRef(null);
 
   useEffect(() => {
@@ -94,6 +97,22 @@ export default function SessionSummary({
     contentRef: printRef,
     documentTitle: 'MediSense AI — Session Summary',
   });
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setExportingPdf(true);
+    try {
+      // Dynamically imported — jsPDF + html2canvas are ~600KB combined and
+      // only needed when this button is actually clicked, not on every
+      // session summary modal open.
+      const { downloadElementAsPdf } = await import('../utils/exportPdf');
+      await downloadElementAsPdf(printRef.current, `MediSense-Report-${session._id}.pdf`);
+    } catch {
+      toast.error('Failed to generate PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const sev = severity ? SEVERITY_CLASSES[severity.level] : null;
 
@@ -123,6 +142,15 @@ export default function SessionSummary({
             >
               <Printer size={15} />
             </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={exportingPdf}
+              title="Download PDF"
+              className="flex rounded-lg border border-border bg-background p-1.5 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-60"
+            >
+              {exportingPdf ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            </button>
+            {diagnosis?.conditions?.length > 0 && <ShareDialog sessionId={session._id} iconOnly />}
             <DialogClose asChild>
               <button className="flex rounded-lg border border-border bg-background p-1.5 text-muted-foreground transition-colors hover:bg-accent">
                 <X size={16} />
@@ -172,8 +200,10 @@ export default function SessionSummary({
         </div>
       </DialogContent>
 
-      {/* Hidden printable version */}
-      <div className="hidden">
+      {/* Printable version — kept off-screen rather than display:none, since
+          the PDF export (html2canvas) needs real layout to capture, and
+          react-to-print tolerates this positioning just as well. */}
+      <div className="pointer-events-none fixed top-0 left-[-9999px]">
         <PrintableSummary ref={printRef} session={session} summary={summary} severity={severity} diagnosis={diagnosis} />
       </div>
     </Dialog>
