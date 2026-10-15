@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Activity, Brain, ShieldCheck, TrendingUp, Zap, Clock, Users, Star,
   ArrowRight, CheckCircle, Lock, HeartPulse, ChevronDown,
@@ -164,10 +164,44 @@ function ConversationDemo() {
   );
 }
 
+// Expanded from the original 3 generic steps to 5 — the 3-step version
+// folded the app's actual headline differentiator (AI assessment + rule-based
+// safety check + ML classifier — see the Architecture section's
+// ARCHITECTURE_STEPS below) into one vague "AI asks follow-up questions"
+// step, so a reader who never scrolled that far would never learn results
+// are cross-checked three independent ways. Step 3 here exists specifically
+// to surface that without going all the way to Architecture's full technical
+// depth.
 const STEPS = [
-  { step: '1', icon: <Zap size={20} />, title: 'Describe your symptoms', desc: "Type or speak — tell MediSense what you're feeling, where, and for how long." },
-  { step: '2', icon: <Brain size={20} />, title: 'AI asks follow-up questions', desc: 'The assistant probes deeper, factoring in your health profile and history.' },
-  { step: '3', icon: <TrendingUp size={20} />, title: 'Get your health report', desc: 'Receive a ranked list of possible conditions with severity scores and next steps.' },
+  {
+    step: '1', icon: <Zap size={18} />, title: 'Describe your symptoms',
+    desc: "Type or speak — tell MediSense what you're feeling, where, and for how long.",
+    preview: { label: 'You type', text: '"A throbbing headache for two days, feels worse in light."' },
+  },
+  {
+    step: '2', icon: <Brain size={18} />, title: 'AI asks follow-up questions',
+    desc: 'The assistant probes deeper, factoring in your health profile and history.',
+    preview: { label: 'MediSense asks', text: "\"Is the pain on one side? How's your sleep been?\"" },
+  },
+  {
+    step: '3', icon: <ShieldCheck size={18} />, title: 'Checked three independent ways',
+    desc: "Your AI assessment is cross-checked by a rule-based safety layer and a local ML classifier — never just one model's word.",
+    signals: [
+      { label: 'AI', sub: 'Assessment', classes: 'border-primary/20 bg-primary/5 text-primary' },
+      { label: 'Rules', sub: 'Safety check', classes: 'border-secondary/20 bg-secondary/5 text-secondary' },
+      { label: 'ML', sub: 'Classifier', classes: 'border-severity-low/20 bg-severity-low-bg text-severity-low-fg' },
+    ],
+  },
+  {
+    step: '4', icon: <TrendingUp size={18} />, title: 'Get your risk & recommendations',
+    desc: 'A ranked list of possible conditions, a severity score, and concrete next steps.',
+    preview: { kind: 'bar', label: 'Migraine', value: 72 },
+  },
+  {
+    step: '5', icon: <History size={18} />, title: 'Saved to your health history',
+    desc: 'Every assessment is tracked, so patterns and changes show up over time.',
+    preview: { kind: 'check', text: '4 assessments tracked — trending steady' },
+  },
 ];
 
 const FEATURES = [
@@ -220,6 +254,109 @@ const FAQS = [
   { q: 'Do I need to create an account?', a: 'Yes, a free account lets MediSense remember your health profile and session history so follow-up questions and assessments are actually personalized.' },
   { q: 'Is MediSense free to use?', a: 'Yes — creating an account and running symptom checks is free, no credit card required.' },
 ];
+
+// Renders a step's "right-hand" content — a quoted example bubble, the
+// three-signal cross-check badges (step 3), a ranked-probability bar, or the
+// finale "tracked over time" chip. Text inside always stays left-aligned;
+// the parent TimelineStep positions the whole block via flex justify-*.
+function StepPreview({ s }) {
+  if (s.signals) {
+    return (
+      <div className="flex items-center gap-1.5">
+        {s.signals.map((sig, idx) => (
+          <Fragment key={sig.label}>
+            {idx > 0 && <span className="h-px w-2.5 shrink-0 bg-border" aria-hidden="true" />}
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.9 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.35, delay: 0.1 + idx * 0.13 }}
+              className={`w-[84px] rounded-[10px] border px-2.5 py-2 text-center ${sig.classes}`}
+            >
+              <div className="text-[10.5px] font-bold">{sig.label}</div>
+              <div className="mt-0.5 text-[9px] text-muted-foreground">{sig.sub}</div>
+            </motion.div>
+          </Fragment>
+        ))}
+      </div>
+    );
+  }
+
+  if (s.preview?.kind === 'bar') {
+    return (
+      <div className="w-full max-w-[280px] rounded-2xl border border-border bg-card p-3.5 text-left">
+        <p className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">Ranked explanations</p>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-xs font-semibold text-foreground">{s.preview.label}</span>
+          <span className="text-xs font-bold text-primary">{s.preview.value}%</span>
+        </div>
+        <div className="h-[5px] overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
+            style={{ width: `${s.preview.value}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (s.preview?.kind === 'check') {
+    return (
+      <div className="relative w-full max-w-[280px] overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+        <div className="pointer-events-none absolute inset-0 animate-[shimmer-sweep_2.2s_ease-in-out_1.8s_1] bg-[linear-gradient(100deg,transparent_30%,rgba(255,255,255,0.6)_50%,transparent_70%)] bg-[length:200%_100%]" />
+        <div className="relative flex items-center gap-2">
+          <CheckCircle size={16} className="shrink-0 text-severity-low-fg" />
+          <span className="text-[13px] font-medium text-foreground">{s.preview.text}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-[280px] rounded-2xl border border-border bg-card p-3.5 text-left">
+      <p className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">{s.preview.label}</p>
+      <p className="text-xs italic text-foreground">{s.preview.text}</p>
+    </div>
+  );
+}
+
+// One alternating row of the desktop "How it works" timeline (lg+ only —
+// MobileSteps below covers everything under that). Even steps run
+// content-left/preview-right, odd steps mirror it, matching the approved
+// Concept B mockup.
+function TimelineStep({ s, i }) {
+  const contentLeft = i % 2 === 0;
+  const text = (
+    <div className={contentLeft ? 'text-right' : 'text-left'}>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">Step {s.step}</div>
+      <h3 className="mb-1 text-base font-bold text-foreground">{s.title}</h3>
+      <p className="text-[13px] leading-relaxed text-muted-foreground">{s.desc}</p>
+    </div>
+  );
+  const preview = (
+    <div className={`flex ${contentLeft ? 'justify-start' : 'justify-end'}`}>
+      <StepPreview s={s} />
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-[1fr_48px_1fr] items-center gap-0 pb-9 last:pb-0">
+      <div className={contentLeft ? 'pr-8' : 'flex justify-end pr-8'}>{contentLeft ? text : preview}</div>
+      <div className="flex justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.5, rotate: -35 }}
+          whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.45, ease: [0.34, 1.56, 0.64, 1], delay: 0.1 + i * 0.2 }}
+          className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-primary/20 bg-primary text-primary-foreground"
+        >
+          {s.icon}
+        </motion.div>
+      </div>
+      <div className={contentLeft ? 'pl-8' : 'flex justify-start pl-8'}>{contentLeft ? preview : text}</div>
+    </div>
+  );
+}
 
 function FaqItem({ q, a, open, onToggle }) {
   return (
@@ -315,25 +452,61 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How it works */}
+      {/* How it works — a centered alternating timeline on lg+ (desktop
+          column has room for the connected-path layout); below that, a
+          simpler single-column list (same left-rail pattern the Architecture
+          section already uses) since the 3-column alternating grid doesn't
+          have the width to work on a phone or small tablet. */}
       <section className="border-b border-t border-border bg-muted/20 px-6 py-24" id="how">
         <div className="mx-auto max-w-[1280px]">
-          <Reveal>
+          <Reveal className="mb-14 text-center">
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-primary">How it works</p>
-            <h2 className="mb-14 max-w-[520px] text-[clamp(24px,3vw,36px)] font-extrabold tracking-tight text-foreground">
+            <h2 className="mx-auto mb-4 max-w-[620px] text-[clamp(24px,3vw,36px)] font-extrabold tracking-tight text-foreground">
               From symptoms to clarity in minutes
             </h2>
+            <p className="mx-auto max-w-[520px] text-[14.5px] leading-relaxed text-muted-foreground">
+              Follow the thread from what you describe to a structured, cross-checked report.
+            </p>
           </Reveal>
-          <RevealGroup className="grid gap-8 md:grid-cols-3">
+
+          {/* Desktop: alternating connected path */}
+          <div className="relative mx-auto hidden max-w-[1040px] lg:block">
+            <motion.div
+              initial={{ scaleY: 0 }}
+              whileInView={{ scaleY: 1 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 1.3, ease: 'easeOut' }}
+              style={{ transformOrigin: 'top' }}
+              className="absolute inset-y-1 left-1/2 w-px -translate-x-1/2 bg-border"
+              aria-hidden="true"
+            />
+            {STEPS.map((s, i) => (
+              <TimelineStep key={s.step} s={s} i={i} />
+            ))}
+          </div>
+
+          {/* Mobile / tablet: single-column list */}
+          <RevealGroup className="relative flex flex-col gap-8 lg:hidden">
+            <div className="absolute bottom-5 left-5 top-5 w-px bg-border" aria-hidden="true" />
             {STEPS.map((s) => (
-              <RevealItem key={s.step} className="rounded-2xl border border-border bg-card p-8">
-                <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">{s.icon}</div>
-                <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-primary">Step {s.step}</div>
-                <h3 className="mb-2.5 text-base font-bold text-foreground">{s.title}</h3>
-                <p className="text-[13.5px] leading-relaxed text-muted-foreground">{s.desc}</p>
+              <RevealItem key={s.step} className="relative flex items-start gap-5">
+                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-primary/20 bg-primary text-primary-foreground">
+                  {s.icon}
+                </div>
+                <div className="flex-1 pt-1">
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">Step {s.step}</div>
+                  <h3 className="mb-1 text-[15px] font-bold text-foreground">{s.title}</h3>
+                  <p className="mb-3 text-[13px] leading-relaxed text-muted-foreground">{s.desc}</p>
+                  <StepPreview s={s} />
+                </div>
               </RevealItem>
             ))}
           </RevealGroup>
+
+          <Reveal className="mt-10 flex flex-col items-center gap-1 text-muted-foreground" delay={0.2}>
+            <a href="#architecture" className="text-[11px] font-semibold tracking-wide">See the full engineering pipeline</a>
+            <ChevronDown size={16} className="animate-bounce" aria-hidden="true" />
+          </Reveal>
         </div>
       </section>
 

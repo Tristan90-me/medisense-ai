@@ -206,3 +206,11 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* One-off highlight sweep for the "How it works" finale chip (Landing.jsx) —
+   a plain global @keyframes so Tailwind's arbitrary `animate-[shimmer-sweep_...]`
+   utility can reference it by name. */
+@keyframes shimmer-sweep {
+  from { background-position: -120% 0; }
+  to { background-position: 220% 0; }
+}
