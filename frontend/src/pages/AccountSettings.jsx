@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  ArrowLeft, Settings, Trash2, Laptop, ShieldAlert, Lock,
+  ArrowLeft, Settings, Trash2, Laptop, ShieldAlert, Lock, Sun, Moon, Monitor, Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,9 @@ import {
   getAccount, updateAccount, changePassword, listTrustedDevices,
   revokeTrustedDevice, deleteAccount,
 } from '../api/account.api';
+import useTheme from '../hooks/useTheme';
 import ErrorState from '../components/ErrorState';
+import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,9 +49,16 @@ const formatDateTime = (d) => new Date(d).toLocaleString('en-GB', {
   day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Light', desc: 'Always use the light theme', icon: Sun },
+  { value: 'dark', label: 'Dark', desc: 'Always use the dark theme', icon: Moon },
+  { value: 'system', label: 'System', desc: "Match your device's setting", icon: Monitor },
+];
+
 export default function AccountSettings() {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { preference: themePreference, setTheme } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -195,6 +204,7 @@ export default function AccountSettings() {
           <Tabs defaultValue="profile">
             <TabsList className="w-full">
               <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
               <TabsTrigger value="security">Security</TabsTrigger>
               <TabsTrigger value="devices">Devices</TabsTrigger>
             </TabsList>
@@ -236,6 +246,51 @@ export default function AccountSettings() {
                       </Button>
                     </div>
                   </Form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* ── Appearance ──────────────────────────────────────── */}
+            <TabsContent value="appearance" className="mt-4">
+              <Card className="rounded-2xl border-border/70 shadow-sm">
+                <CardContent className="p-5">
+                  <p className="mb-1 text-sm font-semibold text-foreground">Theme</p>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    Choose how MediSense AI looks on this device.
+                  </p>
+                  <div role="radiogroup" aria-label="Theme" className="flex flex-col gap-2">
+                    {THEME_OPTIONS.map((opt) => {
+                      const Icon = opt.icon;
+                      const selected = themePreference === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setTheme(opt.value)}
+                          className={cn(
+                            'flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors',
+                            selected
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:bg-accent'
+                          )}
+                        >
+                          <div className={cn(
+                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                            selected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                          )}>
+                            <Icon size={16} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground">{opt.label}</p>
+                            <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                          </div>
+                          {selected && <Check size={16} className="shrink-0 text-primary" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

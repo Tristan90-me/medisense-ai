@@ -581,6 +581,8 @@ export default function SessionChat() {
               ruleBasedTriage={ruleBasedTriage}
               mlClassification={mlClassification}
               onFindCare={() => navigate(diagnosis.seekCareUrgency === 'emergency' ? '/care-finder?urgency=emergency' : '/care-finder')}
+              onBookAppointment={() => navigate('/appointments')}
+              onTrackMedications={() => navigate('/medications')}
             />
           </motion.div>
         )}

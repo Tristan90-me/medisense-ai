@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, LayoutDashboard, Users, Activity, Settings, LogOut,
-  FileBarChart, SlidersHorizontal, ShieldAlert, ScrollText, Megaphone, Menu, X,
+  FileBarChart, SlidersHorizontal, ShieldAlert, ScrollText, Megaphone, Menu, X, Cpu,
 } from 'lucide-react';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { label: 'Reports', to: '/admin/reports', icon: FileBarChart },
   { label: 'Announcements', to: '/admin/announcements', icon: Megaphone },
   { label: 'System Settings', to: '/admin/system-settings', icon: SlidersHorizontal },
+  { label: 'Model Evaluation', to: '/admin/model-evaluation', icon: Cpu },
   { label: 'Audit Log', to: '/admin/audit-log', icon: ScrollText },
   { label: 'Settings', to: '/admin/settings', icon: Settings },
 ];

@@ -270,6 +270,8 @@ export default function SessionDetail() {
           ruleBasedTriage={session.ruleBasedTriage}
           mlClassification={session.mlClassification}
           onFindCare={() => navigate(session.diagnosis.seekCareUrgency === 'emergency' ? '/care-finder?urgency=emergency' : '/care-finder')}
+          onBookAppointment={() => navigate('/appointments')}
+          onTrackMedications={() => navigate('/medications')}
         />
 
         {/* Conversation */}

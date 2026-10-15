@@ -201,6 +201,12 @@ const ARCHITECTURE_STEPS = [
   { icon: <History size={18} />, title: 'Health History', desc: 'Every session is saved so patterns can be tracked over time.' },
 ];
 
+// Real stack, not a marketing simplification — same names a technical
+// reader (e.g. in a project defense) would expect to see confirmed.
+const TECH_STACK = [
+  'React', 'Node.js', 'MongoDB', 'Gemini', 'Bernoulli Naive Bayes ML', 'Leaflet', 'Recharts',
+];
+
 const TRUST_POINTS = [
   { icon: <ShieldCheck size={22} />, title: 'Never alarmist, never dismissive', desc: 'MediSense is trained to take every symptom seriously without overstating risk — calm, clear guidance either way.' },
   { icon: <HeartPulse size={22} />, title: 'Always says when it\'s unsure', desc: 'You\'ll see confidence language like "this could suggest" rather than false certainty — and a clear nudge to see a doctor when it matters.' },
@@ -401,6 +407,19 @@ export default function Landing() {
               </RevealItem>
             ))}
           </RevealGroup>
+          <Reveal className="mt-12 flex flex-col items-center gap-3 border-t border-border pt-10">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Built with</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {TECH_STACK.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full border border-border bg-card px-3 py-1 text-[12px] font-medium text-foreground"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 

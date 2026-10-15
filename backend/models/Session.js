@@ -95,6 +95,13 @@ const sessionSchema = new mongoose.Schema(
     // differs by mode (quick vs full) and this is a display hint, not a
     // field anything else depends on being correct.
     lastProgressPhase: { type: String, default: null },
+    // Audit trail: which admin-saved system prompt (identified by its own
+    // updatedAt timestamp — see aiController.js's getPromptVersion) was
+    // active when this session was started. 'built-in-default' means no
+    // admin override existed yet. Never updated after creation, even if the
+    // prompt changes mid-conversation — reflects what the session actually
+    // started under.
+    promptVersion: { type: String, default: null },
   },
   { timestamps: true }
 );

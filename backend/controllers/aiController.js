@@ -19,6 +19,19 @@ const getEmergencyKeywords = async () => {
   return setting?.value || [];
 };
 
+// Audit-trail identifier for "which system prompt was this assessment run
+// under" — not a true version history (SystemSetting overwrites the prompt
+// text in place, see systemSettingController.js), but the admin-saved
+// prompt's own `updatedAt` is a real, honest point-in-time marker: two
+// sessions sharing this value were assessed under the exact same prompt
+// text, since any edit always bumps it. 'built-in-default' covers the case
+// where no admin override has ever been saved (utils/gemini.js falls back
+// to MEDISENSE_SYSTEM_PROMPT in that case).
+const getPromptVersion = async () => {
+  const setting = await SystemSetting.findOne({ key: "systemPrompt" });
+  return setting?.updatedAt ? setting.updatedAt.toISOString() : "built-in-default";
+};
+
 // ─── Start or Resume Session ───────────────────────────────────────────────
 const startSession = async (req, res) => {
   try {
@@ -44,6 +57,7 @@ const startSession = async (req, res) => {
       dependent,
       mode,
       messages: [],
+      promptVersion: await getPromptVersion(),
     });
 
     res.status(201).json({ session, resumed: false });

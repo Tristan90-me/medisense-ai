@@ -5,6 +5,7 @@ const Session = require('../models/Session');
 const HealthProfile = require('../models/HealthProfile');
 const { sendEmail, adminInviteEmailTemplate } = require('../utils/email');
 const { logAdminAction } = require('../utils/auditLogger');
+const { MODEL_META } = require('../ml/symptomClassifier');
 
 // ── Overview stats ─────────────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
@@ -16,6 +17,9 @@ exports.getStats = async (req, res) => {
       completedSessions,
       emergencySessions,
       todaySessions,
+      severityMismatchCount,
+      flaggedForReviewCount,
+      pendingReviewCount,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ isActive: true }),
@@ -25,6 +29,13 @@ exports.getStats = async (req, res) => {
       Session.countDocuments({
         createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
       }),
+      // Rule-based triage disagreed with the LLM's own severity/emergency
+      // call — see utils/triage.js and aiController.js's severityMismatch
+      // wiring. An independent cross-check, not a second opinion from the
+      // same model.
+      Session.countDocuments({ severityMismatch: true }),
+      Session.countDocuments({ flaggedForReview: true }),
+      Session.countDocuments({ flaggedForReview: true, reviewedAt: null }),
     ]);
 
     // Severity breakdown
@@ -57,6 +68,38 @@ exports.getStats = async (req, res) => {
       todaySessions,
       severityBreakdown,
       sessionsByDay,
+      aiSafety: {
+        severityMismatchCount,
+        flaggedForReviewCount,
+        pendingReviewCount,
+        // Real, pre-computed figure from the classifier's own held-out test
+        // split (backend/ml/train.js) — never recomputed per-request, and
+        // never fabricated if training metadata is somehow missing.
+        mlAccuracy: MODEL_META.evaluation?.accuracy ?? null,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ── ML model evaluation ──────────────────────────────────────────────────────
+// Everything here is read directly from the classifier's own trained
+// model.json (see ml/train.js) — nothing computed per-request, nothing
+// fabricated. accuracy is a single held-out-test figure, not a clinical
+// validation; the frontend surfaces that distinction explicitly.
+exports.getModelEvaluation = async (req, res) => {
+  try {
+    res.json({
+      algorithm: 'Bernoulli Naive Bayes',
+      trainingData: 'Synthetic data sampled from hand-curated per-condition symptom probability profiles, with a fixed random seed for reproducibility — not real patient records.',
+      conditionCount: MODEL_META.conditionCount,
+      symptomCount: MODEL_META.symptomCount,
+      trainSize: MODEL_META.evaluation?.trainSize ?? null,
+      testSize: MODEL_META.evaluation?.testSize ?? null,
+      accuracy: MODEL_META.evaluation?.accuracy ?? null,
+      trainedAt: MODEL_META.trainedAt,
+      version: MODEL_META.version,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect, adminOnly } = require('../middleware/auth');
 const {
   getStats,
+  getModelEvaluation,
   getUsers,
   getUserDetail,
   toggleUserStatus,
@@ -42,6 +43,23 @@ router.use(protect, adminOnly);
  *       403: { description: Authenticated but not an admin }
  */
 router.get('/stats', getStats);
+
+/**
+ * @swagger
+ * /admin/model-evaluation:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Get the symptom classifier's training/evaluation metadata
+ *     description: >
+ *       Everything returned here is read directly from the classifier's own
+ *       trained model.json (see ml/train.js) — a real held-out-test accuracy
+ *       figure, not a clinical validation claim.
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Algorithm, training data description, condition/symptom counts, train/test sizes, accuracy, trained date }
+ *       403: { description: Authenticated but not an admin }
+ */
+router.get('/model-evaluation', getModelEvaluation);
 
 /**
  * @swagger

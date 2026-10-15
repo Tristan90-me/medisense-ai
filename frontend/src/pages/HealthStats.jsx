@@ -119,6 +119,14 @@ export default function HealthStats() {
     else trend = { word: 'holding steady', className: 'text-muted-foreground' };
   }
 
+  // Text equivalent of the severity line chart below, for screen readers —
+  // the chart itself is decorative SVG with no accessible data of its own.
+  const chartSummary = chartData.length > 1
+    ? `Severity over time chart. ${chartData.length} sessions, ${chartData[0].name} to ${chartData[chartData.length - 1].name}: ` +
+      `${chartData.map((d) => `${d.name} ${d.severity} out of 10 (${d.level})`).join(', ')}.` +
+      (trend ? ` Overall ${trend.word}.` : '')
+    : '';
+
   const severityDotColor = (level) => CHART_COLORS.severity[level] || CHART_COLORS.primary;
 
   const CustomDot = (props) => {
@@ -258,7 +266,12 @@ export default function HealthStats() {
                   <p className="text-[11px] text-muted-foreground">
                     Last {chartData.length} sessions with severity scores
                   </p>
-                  <div className="mt-4 h-[200px]">
+                  {/* Recharts renders plain SVG with no text alternative of its
+                      own — a sighted-only summary plus a screen-reader-only
+                      data list cover what the line/dots otherwise convey
+                      purely visually. */}
+                  <p className="sr-only" role="img" aria-label={chartSummary} />
+                  <div className="mt-4 h-[200px]" aria-hidden="true">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Activity, AlertTriangle, Calendar,
+  Users, Activity, AlertTriangle, Calendar, ShieldAlert, Flag, Clock, Cpu,
 } from 'lucide-react';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
@@ -69,6 +69,33 @@ export default function AdminDashboard() {
     { label: 'Emergencies', value: stats.emergencySessions, icon: <AlertTriangle size={18} />, iconBg: 'bg-severity-high-bg', iconFg: 'text-severity-high-fg' },
   ] : [];
 
+  // Independent-signal governance numbers — every one of these is a real
+  // count already stored on Session documents (see aiController.js's
+  // severityMismatch/flaggedForReview wiring) or the classifier's own
+  // held-out test accuracy (ml/train.js), never a fabricated figure.
+  const aiSafetyCards = stats ? [
+    {
+      label: 'Clinical mismatches', value: stats.aiSafety.severityMismatchCount, icon: <ShieldAlert size={18} />,
+      iconBg: 'bg-severity-high-bg', iconFg: 'text-severity-high-fg',
+      hint: 'Rule-based triage disagreed with the AI',
+    },
+    {
+      label: 'Flagged sessions', value: stats.aiSafety.flaggedForReviewCount, icon: <Flag size={18} />,
+      iconBg: 'bg-severity-moderate-bg', iconFg: 'text-severity-moderate-fg',
+      hint: 'Total ever flagged for review',
+    },
+    {
+      label: 'Pending review', value: stats.aiSafety.pendingReviewCount, icon: <Clock size={18} />,
+      iconBg: 'bg-primary/10', iconFg: 'text-primary',
+      hint: 'Flagged sessions not yet reviewed',
+    },
+    {
+      label: 'ML classifier accuracy', value: stats.aiSafety.mlAccuracy != null ? `${Math.round(stats.aiSafety.mlAccuracy * 100)}%` : '—',
+      icon: <Cpu size={18} />, iconBg: 'bg-secondary/10', iconFg: 'text-secondary',
+      hint: 'Held-out test accuracy', onClick: () => navigate('/admin/model-evaluation'),
+    },
+  ] : [];
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-[960px] flex-col gap-4 px-4 py-5">
@@ -108,6 +135,48 @@ export default function AdminDashboard() {
               ))}
             </motion.div>
 
+            {/* AI Safety Monitor */}
+            <div>
+              <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                AI Safety Monitor
+              </p>
+              <motion.div
+                variants={statVariants}
+                initial="hidden"
+                animate="show"
+                className="grid grid-cols-2 gap-2.5 sm:grid-cols-4"
+              >
+                {aiSafetyCards.map((s, i) => (
+                  <motion.div key={i} variants={statItem}>
+                    <Card
+                      onClick={s.onClick}
+                      className={`gap-0 rounded-[14px] border-border/70 py-0 shadow-none ${s.onClick ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
+                    >
+                      <CardContent className="flex items-center gap-3 p-4">
+                        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] ${s.iconBg} ${s.iconFg}`}>
+                          {s.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-2xl font-extrabold leading-none ${s.iconFg}`}>{s.value}</p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">{s.label}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </motion.div>
+              {stats.aiSafety.pendingReviewCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2.5 rounded-full"
+                  onClick={() => navigate('/admin/flagged')}
+                >
+                  <Flag size={14} /> Review {stats.aiSafety.pendingReviewCount} pending session{stats.aiSafety.pendingReviewCount !== 1 ? 's' : ''}
+                </Button>
+              )}
+            </div>
+
             {/* Sessions by day chart */}
             {stats.sessionsByDay?.length > 0 && (
               <Card className="rounded-[14px] border-border/70 shadow-none">
@@ -142,7 +211,11 @@ export default function AdminDashboard() {
             <Card className="rounded-[14px] border-border/70 shadow-none">
               <CardContent>
                 <p className="text-sm font-bold text-foreground">Severity Breakdown</p>
-                <div className="mt-4 h-[180px]">
+                <div
+                  className="mt-4 h-[180px]"
+                  role="img"
+                  aria-label={`Severity breakdown: ${severityData.map((d) => `${d.name} ${d.count}`).join(', ')}.`}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={severityData}>
                       <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />

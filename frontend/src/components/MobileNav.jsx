@@ -5,7 +5,7 @@ import { MoreHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { useUiStore } from '../store/uiStore';
-import { PRIMARY_NAV, SECONDARY_NAV } from './appNav';
+import { PRIMARY_NAV, SECONDARY_NAV, SECONDARY_NAV_GROUP_ORDER } from './appNav';
 
 // Full-screen flows that own the bottom of the viewport (the chat input bar)
 // or are mid-onboarding — a persistent nav there would fight their controls.
@@ -106,23 +106,36 @@ export default function MobileNav() {
                   <X size={18} />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {SECONDARY_NAV.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item.to);
+              <div className="flex flex-col gap-4">
+                {SECONDARY_NAV_GROUP_ORDER.map((group) => {
+                  const items = SECONDARY_NAV.filter((item) => item.group === group);
+                  if (items.length === 0) return null;
                   return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      aria-current={active ? 'page' : undefined}
-                      className={cn(
-                        'flex items-center gap-2.5 rounded-xl border border-border/70 px-3 py-3 text-sm font-medium transition-colors',
-                        active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted',
-                      )}
-                    >
-                      <Icon size={18} className="shrink-0" />
-                      <span className="min-w-0 leading-snug">{item.label}</span>
-                    </Link>
+                    <div key={group}>
+                      <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {items.map((item) => {
+                          const Icon = item.icon;
+                          const active = isActive(item.to);
+                          return (
+                            <Link
+                              key={item.to}
+                              to={item.to}
+                              aria-current={active ? 'page' : undefined}
+                              className={cn(
+                                'flex items-center gap-2.5 rounded-xl border border-border/70 px-3 py-3 text-sm font-medium transition-colors',
+                                active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted',
+                              )}
+                            >
+                              <Icon size={18} className="shrink-0" />
+                              <span className="min-w-0 leading-snug">{item.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

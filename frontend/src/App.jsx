@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AIProvider } from './context/AIContext';
 import { SessionProvider } from './context/SessionContext';
@@ -54,6 +54,7 @@ const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'));
 const AdminFlaggedSessions = lazy(() => import('./pages/admin/AdminFlaggedSessions'));
 const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
 const AdminAnnouncements = lazy(() => import('./pages/admin/AdminAnnouncements'));
+const ModelEvaluation = lazy(() => import('./pages/admin/ModelEvaluation'));
 
 // Shared fallback for lazy route chunks — matches PrivateRoute's own loading
 // state below so a lazy-chunk fetch looks identical to an auth check in
@@ -187,6 +188,7 @@ function AdminApp() {
               <Route path="reports" element={<AdminReports />} />
               <Route path="announcements" element={<AdminAnnouncements />} />
               <Route path="system-settings" element={<SystemSettings />} />
+              <Route path="model-evaluation" element={<ModelEvaluation />} />
               <Route path="audit-log" element={<AdminAuditLog />} />
               <Route path="settings" element={<AdminSettings />} />
             </Route>
@@ -200,12 +202,18 @@ function AdminApp() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Toaster position="top-right" />
-      <Routes>
-        <Route path="/admin/*" element={<AdminApp />} />
-        <Route path="/*" element={<ConsumerApp />} />
-      </Routes>
-    </BrowserRouter>
+    // reducedMotion="user" makes every framer-motion animation across the
+    // app respect the OS-level prefers-reduced-motion setting automatically
+    // (transforms/layout animations disabled, opacity transitions kept) —
+    // no per-component changes needed.
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <Toaster position="top-right" />
+        <Routes>
+          <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="/*" element={<ConsumerApp />} />
+        </Routes>
+      </BrowserRouter>
+    </MotionConfig>
   );
 }

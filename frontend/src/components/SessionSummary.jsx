@@ -189,6 +189,8 @@ export default function SessionSummary({
             ruleBasedTriage={ruleBasedTriage}
             mlClassification={mlClassification}
             onFindCare={() => { onClose(); navigate(diagnosis.seekCareUrgency === 'emergency' ? '/care-finder?urgency=emergency' : '/care-finder'); }}
+            onBookAppointment={() => { onClose(); navigate('/appointments'); }}
+            onTrackMedications={() => { onClose(); navigate('/medications'); }}
             className="border-none bg-transparent p-0"
           />
 

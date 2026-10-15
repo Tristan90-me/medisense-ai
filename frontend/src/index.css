@@ -182,4 +182,27 @@
   a { text-decoration: none; color: inherit; }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; }
+
+  /* Fallback focus ring for any interactive element that doesn't already
+     bring its own focus-visible styling (most shadcn/ui primitives do, via
+     their own cva classes — this just covers raw <button>/<a>/<input>
+     elements used directly in page code). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Accessibility: respect the OS-level "reduce motion" preference. Framer
+   Motion components still mount/unmount normally (so content isn't hidden),
+   but their transform/opacity transitions collapse to near-zero duration —
+   covers framer-motion's inline `transition: all Xs` styles, which aren't
+   reachable via a Tailwind utility override. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

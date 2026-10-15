@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Check, ChevronDown, AlertTriangle, MapPin } from 'lucide-react';
+import {
+  Check, ChevronDown, AlertTriangle, MapPin, Calendar, Pill,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // seekCareUrgency levels that warrant an in-person-care nudge — self-care
@@ -7,25 +9,30 @@ import { cn } from '@/lib/utils';
 // below, since that list isn't relevant to a self-care result.
 const CARE_FINDER_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 
+// Accessibility: a colored circle emoji (🟢🟡🟠🔴) differs from its
+// neighbors by hue alone — exactly the "color is the only signal" pattern
+// WCAG 1.4.1 flags, even with a text label alongside it. Shape-distinct
+// symbols that scale with severity (✓ → ! → !! → 🚨) stay legible for
+// colorblind users and are scannable at a glance without reading the label.
 const URGENCY_META = {
   'self-care': {
-    label: 'Low Concern', emoji: '🟢', classes: 'bg-severity-low-bg text-severity-low-fg',
+    label: 'Low Concern', symbol: '✓', classes: 'bg-severity-low-bg text-severity-low-fg',
     blurb: "Your symptoms generally don't need urgent attention — self-care is a reasonable first step.",
   },
   monitor: {
-    label: 'Monitor', emoji: '🔵', classes: 'bg-primary/10 text-primary',
+    label: 'Monitor', symbol: '○', classes: 'bg-primary/10 text-primary',
     blurb: 'Keep an eye on how this develops over the next day or two.',
   },
   'see-doctor': {
-    label: 'Moderate Concern', emoji: '🟡', classes: 'bg-severity-moderate-bg text-severity-moderate-fg',
+    label: 'Moderate Concern', symbol: '!', classes: 'bg-severity-moderate-bg text-severity-moderate-fg',
     blurb: 'Your symptoms may benefit from professional medical evaluation.',
   },
   'urgent-care': {
-    label: 'High Concern', emoji: '🟠', classes: 'bg-severity-high-bg text-severity-high-fg',
+    label: 'High Concern', symbol: '!!', classes: 'bg-severity-high-bg text-severity-high-fg',
     blurb: 'Consider seeking care soon rather than waiting it out.',
   },
   emergency: {
-    label: 'Urgent Concern', emoji: '🔴', classes: 'bg-severity-critical-bg text-severity-critical-fg',
+    label: 'Urgent Concern', symbol: '🚨', classes: 'bg-severity-critical-bg text-severity-critical-fg',
     blurb: 'This may need immediate medical attention.',
   },
 };
@@ -55,7 +62,8 @@ const RED_FLAGS = [
 // them, so a caller with less context (should that ever happen) degrades
 // gracefully instead of breaking.
 export default function AssessmentResults({
-  diagnosis, symptoms = [], ruleBasedTriage, mlClassification, onFindCare, className,
+  diagnosis, symptoms = [], ruleBasedTriage, mlClassification,
+  onFindCare, onBookAppointment, onTrackMedications, className,
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
   if (!diagnosis) return null;
@@ -70,7 +78,9 @@ export default function AssessmentResults({
 
       {urgency && (
         <div className={cn('mb-3 rounded-xl px-3.5 py-3', urgency.classes)}>
-          <p className="text-sm font-bold">{urgency.emoji} {urgency.label}</p>
+          <p className="text-sm font-bold">
+            <span aria-hidden="true">{urgency.symbol}</span> {urgency.label}
+          </p>
           <p className="mt-0.5 text-xs opacity-90">{urgency.blurb}</p>
         </div>
       )}
@@ -160,13 +170,38 @@ export default function AssessmentResults({
         </div>
       )}
 
-      {showCareFinder && onFindCare && (
-        <button
-          onClick={onFindCare}
-          className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-        >
-          <MapPin size={13} /> Find nearby care
-        </button>
+      {showCareFinder && (onFindCare || onBookAppointment || onTrackMedications) && (
+        <div className="mb-3">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Your next steps
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {onFindCare && (
+              <button
+                onClick={onFindCare}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                <MapPin size={13} /> Find nearby care
+              </button>
+            )}
+            {onBookAppointment && (
+              <button
+                onClick={onBookAppointment}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                <Calendar size={13} /> Book a follow-up appointment
+              </button>
+            )}
+            {onTrackMedications && (
+              <button
+                onClick={onTrackMedications}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              >
+                <Pill size={13} /> Track any medication you're prescribed
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {showCareFinder && (

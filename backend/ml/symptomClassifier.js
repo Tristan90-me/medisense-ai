@@ -77,4 +77,13 @@ const classifySymptoms = (symptoms = []) => {
   };
 };
 
-module.exports = { classifySymptoms, MODEL_META: { version: model.version, trainedAt: model.trainedAt, evaluation: model.evaluation } };
+module.exports = {
+  classifySymptoms,
+  MODEL_META: {
+    version: model.version,
+    trainedAt: model.trainedAt,
+    evaluation: model.evaluation,
+    conditionCount: conditions.length,
+    symptomCount: vocabulary.length,
+  },
+};

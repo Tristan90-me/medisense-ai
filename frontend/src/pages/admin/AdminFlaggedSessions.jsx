@@ -287,7 +287,34 @@ export default function AdminFlaggedSessions() {
                       Previously reviewed {new Date(reviewing.reviewedAt).toLocaleString()}
                     </p>
                   )}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Session ID: <span className="font-mono">{reviewing._id}</span>
+                    {' · '}Started {new Date(reviewing.createdAt).toLocaleString()}
+                    {' · '}Prompt version:{' '}
+                    {reviewing.promptVersion === 'built-in-default'
+                      ? 'built-in default'
+                      : reviewing.promptVersion
+                        ? new Date(reviewing.promptVersion).toLocaleString()
+                        : 'unrecorded'}
+                  </p>
                 </div>
+                {reviewing.mlClassification?.condition && (
+                  <div className="rounded-xl border border-border/70 bg-muted/50 p-3.5 text-sm">
+                    <p className="font-medium text-foreground">ML classifier — third independent signal</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Predicted: <span className="font-medium text-foreground">{reviewing.mlClassification.condition}</span>
+                      {' '}({Math.round((reviewing.mlClassification.confidence || 0) * 100)}% confidence)
+                    </p>
+                    {reviewing.mlClassification.topPredictions?.length > 1 && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Other candidates: {reviewing.mlClassification.topPredictions
+                          .slice(1, 3)
+                          .map((p) => `${p.condition} (${Math.round(p.probability * 100)}%)`)
+                          .join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-foreground">Review notes</label>
                   <Textarea
