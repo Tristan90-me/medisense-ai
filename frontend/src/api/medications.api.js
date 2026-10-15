@@ -9,3 +9,5 @@ export const createMedication = (data) => api.post('/medications', data).then((r
 export const updateMedication = (id, data) => api.put(`/medications/${id}`, data).then((res) => res.data.medication);
 
 export const deleteMedication = (id) => api.delete(`/medications/${id}`).then((res) => res.data);
+
+export const logDose = (id) => api.post(`/medications/${id}/log-dose`).then((res) => res.data.medication);

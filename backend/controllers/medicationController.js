@@ -1,5 +1,16 @@
 const Medication = require('../models/Medication');
 const { resolveDependentId } = require('../utils/resolveDependent');
+const { computeAdherence } = require('../utils/computeAdherence');
+
+// Attaches the computed adherence summary and strips the raw doseLog array
+// (which only grows over the lifetime of a medication — the client never
+// needs more than the summary) before a medication goes out over the wire.
+const serializeMedication = (medication) => {
+  const obj = medication.toObject();
+  obj.adherence = computeAdherence(medication);
+  delete obj.doseLog;
+  return obj;
+};
 
 // GET /api/medications?dependent=<id>
 // With `dependent`, scopes to that one person (self or a specific dependent).
@@ -15,7 +26,7 @@ exports.getMedications = async (req, res) => {
       filter.dependent = await resolveDependentId(req.query.dependent, req.user._id);
     }
     const medications = await Medication.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, medications });
+    res.json({ success: true, medications: medications.map(serializeMedication) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }
@@ -30,7 +41,7 @@ exports.createMedication = async (req, res) => {
     const medication = await Medication.create({
       user: req.user._id, dependent, name, dosage, frequency, startDate, endDate, reminderTimes, active,
     });
-    res.status(201).json({ success: true, medication });
+    res.status(201).json({ success: true, medication: serializeMedication(medication) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }
@@ -48,7 +59,24 @@ exports.updateMedication = async (req, res) => {
       { returnDocument: 'after', runValidators: true }
     );
     if (!medication) return res.status(404).json({ success: false, message: 'Medication not found' });
-    res.json({ success: true, medication });
+    res.json({ success: true, medication: serializeMedication(medication) });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/medications/:id/log-dose
+// Appends one "taken" entry, timestamped now — no backdating, this is a
+// "mark it the moment you take it" log, not a historical editor.
+exports.logDose = async (req, res) => {
+  try {
+    const medication = await Medication.findOneAndUpdate(
+      { _id: req.params.id, user: req.user._id },
+      { $push: { doseLog: { takenAt: new Date() } } },
+      { returnDocument: 'after' }
+    );
+    if (!medication) return res.status(404).json({ success: false, message: 'Medication not found' });
+    res.status(201).json({ success: true, medication: serializeMedication(medication) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }

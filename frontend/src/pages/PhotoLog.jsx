@@ -3,13 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Camera, Plus, Trash2, AlertTriangle, ImageOff, Upload,
-  Zap, ClipboardList, ArrowRight,
+  Zap, ClipboardList, ArrowRight, LayoutGrid, LineChart, ArrowLeftRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   listPhotos, uploadPhoto, deletePhoto, getPhotoImageUrl,
 } from '../api/photoLog.api';
 import { listDependents } from '../api/dependents.api';
+import ErrorState from '../components/ErrorState';
+import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -170,8 +172,13 @@ export default function PhotoLog() {
 
   const [detailPhoto, setDetailPhoto] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [view, setView] = useState('all'); // 'all' | 'progress'
+  const [compareGroup, setCompareGroup] = useState(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const [photoList, deps] = await Promise.all([
         listPhotos(scopedDependentId),
@@ -180,7 +187,7 @@ export default function PhotoLog() {
       setPhotos(photoList);
       setDependents(deps);
     } catch {
-      toast.error('Failed to load photo log');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -277,6 +284,35 @@ export default function PhotoLog() {
     return null;
   };
 
+  // Groups photos by (body region, subject) so "progress over time" never
+  // mixes, say, the account owner's chest photos with a dependent's — only
+  // groups with 2+ photos are shown, since a single photo has nothing to
+  // compare against. Photos logged with no body region can't be grouped at
+  // all (there's no "same spot over time" to anchor them to).
+  const progressGroups = photos
+    .filter((p) => p.bodyRegion)
+    .reduce((groups, p) => {
+      const subjectKey = p.dependent || p.subjectSex || 'self';
+      const key = `${p.bodyRegion}|${subjectKey}`;
+      let group = groups.find((g) => g.key === key);
+      if (!group) {
+        group = { key, bodyRegion: p.bodyRegion, subjectLabel: subjectLabel(p) || 'Myself', items: [] };
+        groups.push(group);
+      }
+      group.items.push(p);
+      return groups;
+    }, [])
+    .filter((g) => g.items.length >= 2)
+    .map((g) => ({
+      ...g,
+      items: g.items.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+    }))
+    .sort((a, b) => {
+      const aLast = a.items[a.items.length - 1].createdAt;
+      const bLast = b.items[b.items.length - 1].createdAt;
+      return new Date(bLast) - new Date(aLast);
+    });
+
   const startAssessment = (photo, mode) => {
     const parts = [];
     const region = bodyRegionLabel(photo.bodyRegion);
@@ -295,7 +331,7 @@ export default function PhotoLog() {
   };
 
   const totalCount = photos.length;
-  const isEmpty = !loading && totalCount === 0;
+  const isEmpty = !loading && !loadError && totalCount === 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -341,6 +377,14 @@ export default function PhotoLog() {
           </div>
         )}
 
+        {!loading && loadError && (
+          <ErrorState
+            title="We couldn't load your photo log"
+            message="Your information is safe."
+            onRetry={load}
+          />
+        )}
+
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
             <motion.p
@@ -360,7 +404,34 @@ export default function PhotoLog() {
           </div>
         )}
 
-        {!loading && !isEmpty && (
+        {!loading && !loadError && !isEmpty && (
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setView('all')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors',
+                view === 'all'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-foreground hover:bg-accent'
+              )}
+            >
+              <LayoutGrid size={13} /> All photos
+            </button>
+            <button
+              onClick={() => setView('progress')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors',
+                view === 'progress'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-foreground hover:bg-accent'
+              )}
+            >
+              <LineChart size={13} /> Symptom Progress
+            </button>
+          </div>
+        )}
+
+        {!loading && !loadError && !isEmpty && view === 'all' && (
           <AnimatePresence mode="popLayout">
             <motion.div layout className="grid grid-cols-2 gap-3">
               {photos.map((p, i) => {
@@ -391,6 +462,55 @@ export default function PhotoLog() {
               })}
             </motion.div>
           </AnimatePresence>
+        )}
+
+        {!loading && !loadError && !isEmpty && view === 'progress' && (
+          progressGroups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 px-4 py-14 text-center">
+              <LineChart size={26} className="text-muted-foreground/50" />
+              <p className="text-sm font-semibold text-foreground">Not enough photos to show progress yet</p>
+              <p className="max-w-[280px] text-xs leading-relaxed text-muted-foreground">
+                Log 2 or more photos of the same body region to see them lined up over time.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {progressGroups.map((group) => (
+                <Card key={group.key} className="rounded-2xl py-4 shadow-sm">
+                  <CardContent className="px-4">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{bodyRegionLabel(group.bodyRegion)}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {group.subjectLabel} · {group.items.length} photos
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCompareGroup(group)}
+                        className="shrink-0 gap-1.5"
+                      >
+                        <ArrowLeftRight size={13} /> Compare
+                      </Button>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-1">
+                      {group.items.map((p) => (
+                        <div key={p._id} className="flex w-20 shrink-0 flex-col items-center gap-1">
+                          <div className="aspect-square w-20 overflow-hidden rounded-xl border border-border/70">
+                            <PhotoThumbnail photo={p} onClick={() => setDetailPhoto(p)} />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(p.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )
         )}
       </motion.div>
 
@@ -632,6 +752,35 @@ export default function PhotoLog() {
                   <Trash2 size={15} /> Remove
                 </Button>
               </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Compare dialog — oldest vs newest photo in a progress group. No AI
+          judgment is made about what changed; this just lines the two images
+          up so the person can look for themselves. */}
+      <Dialog open={!!compareGroup} onOpenChange={(open) => !open && setCompareGroup(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          {compareGroup && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Visual comparison — {bodyRegionLabel(compareGroup.bodyRegion)}</DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-3">
+                {[compareGroup.items[0], compareGroup.items[compareGroup.items.length - 1]].map((p, i) => (
+                  <div key={p._id} className="flex flex-col gap-1.5">
+                    <PhotoFullImage photoId={p._id} />
+                    <p className="text-center text-xs font-medium text-foreground">
+                      {i === 0 ? 'Earliest' : 'Most recent'}
+                    </p>
+                    <p className="text-center text-[11px] text-muted-foreground">{formatDate(p.createdAt)}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="rounded-lg bg-muted px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                A side-by-side comparison only — MediSense AI does not judge what changed between these photos.
+              </p>
             </>
           )}
         </DialogContent>

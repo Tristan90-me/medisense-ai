@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, History, TrendingUp, Pill, MapPin,
-  Trophy, Users, PhoneCall, Camera, Users2, Settings, Lock,
+  Trophy, Users, PhoneCall, Camera, Users2, Settings, Lock, Calendar,
 } from 'lucide-react';
 
 // Core destinations shown in the desktop sidebar (lg+) and the mobile bottom
@@ -16,6 +16,7 @@ export const PRIMARY_NAV = [
 // Everything else, reachable on mobile through the "More" sheet. Desktop
 // keeps these in the dashboard's secondary grid, so they stay unchanged there.
 export const SECONDARY_NAV = [
+  { label: 'Appointments', icon: Calendar, to: '/appointments' },
   { label: 'Health Score', icon: Trophy, to: '/health-score' },
   { label: 'Family & Dependents', icon: Users, to: '/dependents' },
   { label: 'Emergency Contacts', icon: PhoneCall, to: '/emergency-contacts' },

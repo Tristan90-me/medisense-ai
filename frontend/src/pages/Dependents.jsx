@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { listDependents, createDependent, updateDependent, deleteDependent } from '../api/dependents.api';
+import ErrorState from '../components/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +50,7 @@ export default function Dependents() {
   const navigate = useNavigate();
   const [dependents, setDependents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -60,11 +62,13 @@ export default function Dependents() {
   });
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await listDependents();
       setDependents(data);
     } catch {
-      toast.error('Failed to load family members');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -157,7 +161,15 @@ export default function Dependents() {
           </div>
         )}
 
-        {!loading && dependents.length === 0 && (
+        {!loading && loadError && (
+          <ErrorState
+            title="We couldn't load your family members"
+            message="Your information is safe."
+            onRetry={load}
+          />
+        )}
+
+        {!loading && !loadError && dependents.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
             <p className="text-4xl">👨‍👩‍👧</p>
             <p className="text-base font-semibold text-foreground">No family members yet</p>
@@ -171,7 +183,7 @@ export default function Dependents() {
         )}
 
         <AnimatePresence mode="popLayout">
-          {!loading && dependents.map((d, i) => {
+          {!loading && !loadError && dependents.map((d, i) => {
             const age = computeAge(d.dateOfBirth);
             return (
               <motion.div

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trophy, Lock, Info, ArrowUpRight } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { getHealthScore } from '../api/healthScore.api';
+import ErrorState from '../components/ErrorState';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,13 +44,16 @@ export default function HealthScoreAchievements() {
   const navigate = useNavigate();
   const [healthScore, setHealthScore] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await getHealthScore();
       setHealthScore(data);
     } catch {
-      toast.error('Failed to load health score');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -103,7 +106,15 @@ export default function HealthScoreAchievements() {
           </div>
         )}
 
-        {!loading && (
+        {!loading && loadError && (
+          <ErrorState
+            title="We couldn't load your health score"
+            message="Your information is safe."
+            onRetry={load}
+          />
+        )}
+
+        {!loading && !loadError && (
           <>
             {/* Overall score */}
             <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">

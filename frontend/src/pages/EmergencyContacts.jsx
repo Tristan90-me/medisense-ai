@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import {
   listEmergencyContacts, createEmergencyContact, updateEmergencyContact, deleteEmergencyContact,
 } from '../api/emergencyContacts.api';
+import ErrorState from '../components/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ export default function EmergencyContacts() {
   const navigate = useNavigate();
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -51,11 +53,13 @@ export default function EmergencyContacts() {
   });
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await listEmergencyContacts();
       setContacts(data);
     } catch {
-      toast.error('Failed to load emergency contacts');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -166,7 +170,15 @@ export default function EmergencyContacts() {
           </div>
         )}
 
-        {!loading && contacts.length === 0 && (
+        {!loading && loadError && (
+          <ErrorState
+            title="We couldn't load your emergency contacts"
+            message="Your information is safe."
+            onRetry={load}
+          />
+        )}
+
+        {!loading && !loadError && contacts.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
             <p className="text-4xl">🚑</p>
             <p className="text-base font-semibold text-foreground">No emergency contacts yet</p>
@@ -180,7 +192,7 @@ export default function EmergencyContacts() {
         )}
 
         <AnimatePresence mode="popLayout">
-          {!loading && contacts.map((c, i) => (
+          {!loading && !loadError && contacts.map((c, i) => (
             <motion.div
               key={c._id}
               layout

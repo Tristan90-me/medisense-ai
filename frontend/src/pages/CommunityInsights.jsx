@@ -68,7 +68,7 @@ export default function CommunityInsights() {
         >
           <ArrowLeft size={18} />
         </button>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-1 items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent-foreground">
             <Users2 size={16} />
           </div>
@@ -77,6 +77,9 @@ export default function CommunityInsights() {
             <p className="text-[11px] text-muted-foreground">Anonymized trends across all MediSense AI users</p>
           </div>
         </div>
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-severity-low-bg px-2.5 py-1 text-[10px] font-semibold text-severity-low-fg">
+          <ShieldCheck size={11} /> Anonymized data only
+        </span>
       </div>
 
       <div className="mx-auto flex max-w-[640px] flex-col gap-4 px-4 py-5">

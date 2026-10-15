@@ -224,4 +224,89 @@ describe('Medications CRUD', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe('dose logging and adherence', () => {
+    test('list/create/update responses never leak the raw doseLog array', async () => {
+      const user = await createUser();
+      const token = tokenFor(user);
+
+      const create = await request(app)
+        .post('/api/medications')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Metformin', reminderTimes: ['08:00'] });
+      expect(create.body.medication.doseLog).toBeUndefined();
+      expect(create.body.medication.adherence).toEqual({
+        trackable: true, takenCount: 0, expectedCount: 0, percentage: null,
+      });
+      const id = create.body.medication._id;
+
+      const list = await request(app)
+        .get('/api/medications')
+        .set('Authorization', `Bearer ${token}`);
+      expect(list.body.medications[0].doseLog).toBeUndefined();
+      expect(list.body.medications[0].adherence).toBeDefined();
+
+      const update = await request(app)
+        .put(`/api/medications/${id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ dosage: '500mg' });
+      expect(update.body.medication.doseLog).toBeUndefined();
+      expect(update.body.medication.adherence).toBeDefined();
+    });
+
+    test('logging a dose appends to doseLog and is reflected in adherence', async () => {
+      const user = await createUser();
+      const token = tokenFor(user);
+      const medication = await Medication.create({ user: user._id, name: 'Metformin', reminderTimes: ['08:00'] });
+
+      const res = await request(app)
+        .post(`/api/medications/${medication._id}/log-dose`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(201);
+      expect(res.body.medication.adherence.takenCount).toBe(1);
+      expect(res.body.medication.doseLog).toBeUndefined();
+
+      const updated = await Medication.findById(medication._id);
+      expect(updated.doseLog).toHaveLength(1);
+      expect(updated.doseLog[0].takenAt).toBeInstanceOf(Date);
+    });
+
+    test('logging a dose twice appends two entries, not a replace', async () => {
+      const user = await createUser();
+      const token = tokenFor(user);
+      const medication = await Medication.create({ user: user._id, name: 'Metformin', reminderTimes: ['08:00'] });
+
+      await request(app).post(`/api/medications/${medication._id}/log-dose`).set('Authorization', `Bearer ${token}`);
+      const second = await request(app).post(`/api/medications/${medication._id}/log-dose`).set('Authorization', `Bearer ${token}`);
+
+      expect(second.body.medication.adherence.takenCount).toBe(2);
+      const updated = await Medication.findById(medication._id);
+      expect(updated.doseLog).toHaveLength(2);
+    });
+
+    test("user B cannot log a dose against user A's medication", async () => {
+      const userA = await createUser({ email: 'dose-a@example.com' });
+      const userB = await createUser({ email: 'dose-b@example.com' });
+      const tokenB = tokenFor(userB);
+      const medication = await Medication.create({ user: userA._id, name: "A's Med" });
+
+      const res = await request(app)
+        .post(`/api/medications/${medication._id}/log-dose`)
+        .set('Authorization', `Bearer ${tokenB}`);
+
+      expect(res.status).toBe(404);
+      const unchanged = await Medication.findById(medication._id);
+      expect(unchanged.doseLog).toHaveLength(0);
+    });
+
+    test('logging a dose for a nonexistent medication id returns 404', async () => {
+      const user = await createUser();
+      const token = tokenFor(user);
+      const res = await request(app)
+        .post(`/api/medications/${new (require('mongoose').Types.ObjectId)()}/log-dose`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(404);
+    });
+  });
 });

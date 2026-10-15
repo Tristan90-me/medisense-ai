@@ -11,6 +11,8 @@ import { linkPhotoSession } from '../api/photoLog.api';
 import SessionSummary from '../components/SessionSummary';
 import MLClassifierCard from '../components/MLClassifierCard';
 import AssessmentResults from '../components/AssessmentResults';
+import ReferralDialog from '../components/ReferralDialog';
+import BrandedLoader from '../components/BrandedLoader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
@@ -18,8 +20,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, Mail, ArrowLeft, Activity, Loader2, ShieldAlert, Check,
+  Phone, Mail, ArrowLeft, Activity, ShieldAlert, Check,
 } from 'lucide-react';
+
+// Same urgency levels AssessmentResults.jsx gates its own "Find nearby
+// care" CTA on — a referral only makes sense when professional evaluation
+// is actually what's being suggested.
+const REFERRAL_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 
 const SEVERITY_CLASSES = {
   Low: 'bg-severity-low-bg text-severity-low-fg',
@@ -321,12 +328,7 @@ export default function SessionChat() {
   };
 
   if (initializing) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 size={28} className="animate-spin text-primary" />
-        <p className="text-sm">Starting your session...</p>
-      </div>
-    );
+    return <BrandedLoader message="Starting your session..." />;
   }
 
   return (
@@ -588,10 +590,22 @@ export default function SessionChat() {
 
       {/* Summary button */}
       {messages.length >= 4 && (
-        <div className="border-t border-border px-4 py-2">
-          <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => setShowSummary(true)}>
+        <div className="flex gap-2 border-t border-border px-4 py-2">
+          <Button variant="outline" size="sm" className="flex-1 rounded-full" onClick={() => setShowSummary(true)}>
             View Session Summary
           </Button>
+          {diagnosis?.conditions?.length > 0 && REFERRAL_URGENCIES.includes(diagnosis?.seekCareUrgency) && (
+            <ReferralDialog
+              session={{
+                _id: session._id,
+                dependent: session.dependent,
+                symptoms: sessionSymptoms,
+                diagnosis,
+                severityScore: severity?.score,
+                severityLevel: severity?.level,
+              }}
+            />
+          )}
         </div>
       )}
 

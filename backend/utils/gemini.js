@@ -322,6 +322,43 @@ Keep it plain, warm, and clear. No markdown. No brackets.
   return response.text;
 };
 
+// ─── Weekly Summary ─────────────────────────────────────────────────────────
+// Turns real tracked data (never the LLM's own invented figures) into a
+// short, warm, in-app recap. `stats` matches the shape computed in
+// aiController.getWeeklySummary — session count, severity trend vs. the
+// prior 7-day window, top symptoms, medication adherence, and health-score
+// movement. Only called when there's at least some real data to narrate.
+const generateWeeklySummary = async (stats) => {
+  const summaryPrompt = `
+Based on this user's real tracked health activity from the past 7 days, write a short, warm weekly recap for an in-app health dashboard.
+
+Symptom-check sessions this week: ${stats.sessionCount}
+Average reported severity this week: ${stats.avgSeverity ?? "Not assessed"}${stats.avgSeverity != null ? "/10" : ""}
+Severity trend vs. the previous 7 days: ${stats.trend ?? "Not enough data to compare"}
+Most frequently reported symptoms this week: ${stats.topSymptoms.length ? stats.topSymptoms.join(", ") : "None"}
+Emergency-level sessions this week: ${stats.emergencyCount}
+Medication adherence this week: ${stats.adherencePercentage != null ? `${stats.adherencePercentage}%` : "No trackable medications"}
+Health score change vs. a week ago: ${stats.scoreDelta != null ? (stats.scoreDelta > 0 ? `+${stats.scoreDelta}` : stats.scoreDelta) : "Not enough data to compare"}
+
+Write 2 short paragraphs, plain language, encouraging but honest tone:
+1. What happened this week, using only the numbers given above.
+2. One gentle observation or encouragement, plus a brief reminder this is not a diagnosis.
+
+No markdown. No brackets. No headings. Do not invent any figures not given above.
+`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.5-flash-lite",
+    contents: [{ role: "user", parts: [{ text: summaryPrompt }] }],
+    config: {
+      temperature: 0.3,
+      maxOutputTokens: 400,
+    },
+  });
+
+  return response.text;
+};
+
 // ─── Photo Analysis ─────────────────────────────────────────────────────────
 // Descriptive (NOT diagnostic) visual observation of a symptom photo (rash,
 // wound, swelling, etc). Uses Gemini's structured-output mechanism
@@ -381,5 +418,5 @@ const analyzePhoto = async (imageBuffer, mimeType, context = '') => {
 };
 
 module.exports = {
-  chat, chatStream, generateSummary, parseAIResponse, analyzePhoto, MEDISENSE_SYSTEM_PROMPT,
+  chat, chatStream, generateSummary, generateWeeklySummary, parseAIResponse, analyzePhoto, MEDISENSE_SYSTEM_PROMPT,
 };

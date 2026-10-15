@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { listAnnouncements } from '../api/announcements.api';
 import { getHealthScore } from '../api/healthScore.api';
+import { getWeeklySummary } from '../api/weeklySummary.api';
 import { listDependents } from '../api/dependents.api';
 import { listMedications } from '../api/medications.api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,7 +22,8 @@ import { cn } from '@/lib/utils';
 import {
   Activity, Map, Stethoscope, ArrowRight, MessageCircle,
   LogOut,
-  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, Users2, PhoneCall, Settings, Trophy, Camera, Bell, Megaphone,
+  ClipboardCheck, UserPlus, ChevronRight, AlertTriangle, Users, Users2, PhoneCall, Settings, Trophy, Camera, Bell, Megaphone, Calendar,
+  Sparkles, RefreshCw,
 } from 'lucide-react';
 import { PRIMARY_NAV } from '../components/appNav';
 import { useAI } from '../context/AIContext';
@@ -108,6 +110,12 @@ export default function Dashboard() {
   const [activeMedsCount, setActiveMedsCount] = useState(null);
   const [kpiLoading, setKpiLoading] = useState(true);
 
+  // Weekly AI recap — fetched independently so a slow/failing LLM call
+  // never blocks the rest of the dashboard; the card just doesn't render.
+  const [weeklySummary, setWeeklySummary] = useState(null);
+  const [weeklySummaryLoading, setWeeklySummaryLoading] = useState(true);
+  const [weeklySummaryRefreshing, setWeeklySummaryRefreshing] = useState(false);
+
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -147,6 +155,34 @@ export default function Dashboard() {
     })();
     return () => { ignore = true; };
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const data = await getWeeklySummary();
+        if (ignore) return;
+        setWeeklySummary(data);
+      } catch {
+        // Non-critical — the card just won't render this load.
+      } finally {
+        if (!ignore) setWeeklySummaryLoading(false);
+      }
+    })();
+    return () => { ignore = true; };
+  }, []);
+
+  const handleRefreshWeeklySummary = async () => {
+    setWeeklySummaryRefreshing(true);
+    try {
+      const data = await getWeeklySummary(true);
+      setWeeklySummary(data);
+    } catch {
+      // Keep showing the previous recap rather than clearing it on failure.
+    } finally {
+      setWeeklySummaryRefreshing(false);
+    }
+  };
 
   // Single fetch on mount — no polling. "In-app only" per the Phase 8 plan
   // means a fresh fetch on each dashboard load is sufficient; no push/
@@ -211,6 +247,13 @@ export default function Dashboard() {
   // strip — Health Score and Medications/Sessions/Care Finder are reachable
   // there, so they're intentionally not duplicated here.
   const secondaryActions = [
+    {
+      icon: Calendar,
+      color: 'moderate',
+      title: 'Appointments',
+      desc: 'Track upcoming and past visits',
+      onClick: () => navigate('/appointments'),
+    },
     {
       icon: Users,
       color: 'accent',
@@ -593,6 +636,34 @@ export default function Dashboard() {
               ))
             )}
           </motion.div>
+
+          {/* Weekly AI recap — a short narrative built from real tracked
+              activity (sessions, medication adherence, health score), not
+              auto-refreshed on every load since the backend caches it daily. */}
+          {weeklySummaryLoading ? (
+            <Skeleton className="mb-6 h-[110px] rounded-2xl" />
+          ) : weeklySummary && (
+            <Card className="mb-6 rounded-2xl border-border/70 bg-primary/5 shadow-sm">
+              <CardContent className="flex flex-col gap-2 px-4 py-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+                    <Sparkles size={14} className="text-primary" /> Your week in review
+                  </p>
+                  <button
+                    onClick={handleRefreshWeeklySummary}
+                    disabled={weeklySummaryRefreshing}
+                    className="flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                    aria-label="Refresh weekly recap"
+                  >
+                    <RefreshCw size={13} className={weeklySummaryRefreshing ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                <p className="text-[13px] leading-relaxed text-muted-foreground">
+                  {weeklySummary.summary}
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Recent activity — the last few check-ins, reusing the sessions
               already fetched for the snapshot card above (no extra request). */}

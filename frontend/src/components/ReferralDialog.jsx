@@ -1,0 +1,209 @@
+import { useState, useRef } from 'react';
+import { FileText, Download, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
+import { listDependents } from '../api/dependents.api';
+import api from '../api/axios';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+const URGENCY_LABEL = {
+  'self-care': 'Self-care appropriate',
+  monitor: 'Monitor at home',
+  'see-doctor': 'Non-urgent medical evaluation recommended',
+  'urgent-care': 'Urgent care recommended',
+  emergency: 'Emergency evaluation recommended',
+};
+
+const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Printed/exported content — kept as its own component so the PDF export
+// (html2canvas) can target it directly, same pattern as SessionDetail.jsx's
+// PrintableSession.
+function PrintableReferral({ ref, session, patientName, healthProfile }) {
+  const diagnosis = session.diagnosis;
+  const topCondition = diagnosis?.conditions?.[0]?.name;
+
+  const historyLines = healthProfile ? [
+    healthProfile.preExistingConditions?.length && `Pre-existing conditions: ${healthProfile.preExistingConditions.join(', ')}`,
+    healthProfile.allergies?.length && `Allergies: ${healthProfile.allergies.join(', ')}`,
+    healthProfile.currentMedications?.length && `Current medications: ${healthProfile.currentMedications.join(', ')}`,
+    healthProfile.familyHistory?.length && `Family history: ${healthProfile.familyHistory.join(', ')}`,
+  ].filter(Boolean) : [];
+
+  return (
+    <div ref={ref} className="mx-auto max-w-[700px] p-10 text-neutral-800">
+      <h1 className="mb-1 text-xl font-bold text-neutral-900">MediSense AI — Referral Summary</h1>
+      <p className="mb-6 text-sm text-neutral-500">Generated {formatDate(new Date())}</p>
+
+      <div className="mb-5">
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-neutral-500">Patient</p>
+        <p className="text-sm">{patientName}</p>
+      </div>
+
+      <div className="mb-5">
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-neutral-500">Reason for referral</p>
+        <p className="text-sm">{topCondition ? `Possible ${topCondition}` : 'Symptom assessment'}</p>
+      </div>
+
+      {session.symptoms?.length > 0 && (
+        <div className="mb-5">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Reported symptoms</p>
+          <ul className="list-disc pl-5 text-sm leading-relaxed">
+            {session.symptoms.map((s, i) => (
+              <li key={i}>
+                {s.name}
+                {(s.duration || s.onset) && ` (${[s.duration, s.onset && `${s.onset} onset`].filter(Boolean).join(', ')})`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mb-5">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Relevant health history</p>
+        {historyLines.length > 0 ? (
+          <ul className="list-disc pl-5 text-sm leading-relaxed">
+            {historyLines.map((line, i) => <li key={i}>{line}</li>)}
+          </ul>
+        ) : (
+          <p className="text-sm text-neutral-500">No pre-existing conditions, allergies, medications, or family history on file.</p>
+        )}
+      </div>
+
+      <div className="mb-5">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Assessment</p>
+        {session.severityLevel && (
+          <p className="mb-1.5 text-sm">
+            Severity: <strong>{session.severityLevel}</strong> ({session.severityScore}/10)
+          </p>
+        )}
+        {diagnosis?.seekCareUrgency && (
+          <p className="mb-2 text-sm">
+            <strong>{URGENCY_LABEL[diagnosis.seekCareUrgency] || diagnosis.seekCareUrgency}</strong>
+          </p>
+        )}
+        {diagnosis?.conditions?.length > 0 && (
+          <>
+            <p className="mb-1 text-xs text-neutral-500">Possible explanations (AI-generated, not confirmed):</p>
+            {diagnosis.conditions.map((c, i) => (
+              <div key={i} className="flex justify-between border-b border-neutral-100 py-1.5 text-sm">
+                <span>{c.name}</span>
+                <span>{c.probability}% probability</span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {diagnosis?.recommendations?.length > 0 && (
+        <div className="mb-5">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Recommendations given to patient</p>
+          <ul className="list-disc pl-5 text-sm leading-relaxed">
+            {diagnosis.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <p className="mt-6 border-t border-neutral-200 pt-4 text-[11px] text-neutral-400">
+        Generated by MediSense AI, an AI-assisted symptom-checking tool. This is not a clinical diagnosis and does
+        not replace independent medical judgment — provided as context for a healthcare professional's own evaluation.
+      </p>
+    </div>
+  );
+}
+
+// Shared by SessionChat.jsx (right after a live assessment) and
+// SessionDetail.jsx (looking back at a completed one). Resolves the patient
+// name and health history lazily, only once the dialog is actually opened —
+// most sessions are never turned into a referral, so there's no reason to
+// fetch this on page load.
+export default function ReferralDialog({ session, iconOnly = false }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [patientName, setPatientName] = useState(null);
+  const [healthProfile, setHealthProfile] = useState(null);
+  const printRef = useRef(null);
+
+  const handleOpen = async () => {
+    setOpen(true);
+    if (patientName) return;
+    setLoading(true);
+    try {
+      let name = user?.name || 'Patient';
+      if (session.dependent) {
+        const deps = await listDependents();
+        const dep = deps.find((d) => d._id === session.dependent);
+        name = dep?.name || 'Patient';
+      }
+      setPatientName(name);
+      try {
+        const res = await api.get('/profile', { params: session.dependent ? { dependent: session.dependent } : {} });
+        setHealthProfile(res.data.profile);
+      } catch {
+        setHealthProfile(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setExportingPdf(true);
+    try {
+      const { downloadElementAsPdf } = await import('../utils/exportPdf');
+      await downloadElementAsPdf(printRef.current, `MediSense-Referral-${session._id}.pdf`);
+    } catch {
+      toast.error('Failed to generate PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  return (
+    <>
+      {iconOnly ? (
+        <button
+          onClick={handleOpen}
+          title="Generate referral summary"
+          className="flex rounded-lg border border-border bg-background p-1.5 text-muted-foreground transition-colors hover:bg-accent"
+        >
+          <FileText size={15} />
+        </button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={handleOpen} className="gap-1.5 rounded-full">
+          <FileText size={14} /> Referral summary
+        </Button>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">Referral summary</DialogTitle>
+          </DialogHeader>
+
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 size={16} className="animate-spin" /> Preparing referral...
+            </div>
+          )}
+
+          {!loading && patientName && (
+            <>
+              <div className="rounded-xl border border-border bg-muted/30">
+                <PrintableReferral ref={printRef} session={session} patientName={patientName} healthProfile={healthProfile} />
+              </div>
+              <Button onClick={handleDownloadPdf} disabled={exportingPdf} className="gap-1.5 self-start rounded-full">
+                {exportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                {exportingPdf ? 'Preparing...' : 'Download PDF'}
+              </Button>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

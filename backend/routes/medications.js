@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getMedications, createMedication, updateMedication, deleteMedication,
+  getMedications, createMedication, updateMedication, deleteMedication, logDose,
 } = require('../controllers/medicationController');
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -98,5 +98,24 @@ router.put('/:id', protect, validate([...medicationIdParamRules, ...updateMedica
  *       404: { description: Medication not found or not owned by this user }
  */
 router.delete('/:id', protect, validate(medicationIdParamRules), deleteMedication);
+
+/**
+ * @swagger
+ * /medications/{id}/log-dose:
+ *   post:
+ *     tags: [Medications]
+ *     summary: Log a dose as taken, timestamped now
+ *     description: Appends one entry to this medication's dose log — the basis for its adherence percentage. Not backdatable.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       201: { description: Dose logged, returns the updated medication with its adherence summary }
+ *       404: { description: Medication not found or not owned by this user }
+ */
+router.post('/:id/log-dose', protect, validate(medicationIdParamRules), logDose);
 
 module.exports = router;

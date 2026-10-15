@@ -1,10 +1,14 @@
 const Session = require("../models/Session");
 const HealthProfile = require("../models/HealthProfile");
 const SystemSetting = require("../models/SystemSetting");
-const { chat, chatStream, generateSummary } = require("../utils/gemini");
+const Medication = require("../models/Medication");
+const HealthScore = require("../models/HealthScore");
+const WeeklySummary = require("../models/WeeklySummary");
+const { chat, chatStream, generateSummary, generateWeeklySummary } = require("../utils/gemini");
 const { resolveDependentId } = require("../utils/resolveDependent");
 const { computeTriageScore } = require("../utils/triage");
 const { classifySymptoms } = require("../ml/symptomClassifier");
+const { computeAdherence } = require("../utils/computeAdherence");
 
 // Loads the admin-editable custom emergency-keyword list (see
 // models/SystemSetting.js, key 'emergencyKeywords') for the rule-based
@@ -299,6 +303,97 @@ const getSummary = async (req, res) => {
   }
 };
 
+// ─── Weekly Summary ─────────────────────────────────────────────────────────
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const getWeeklySummary = async (req, res) => {
+  try {
+    const dependent = await resolveDependentId(req.query.dependent, req.user.id);
+    const scope = { user: req.user.id, dependent };
+
+    const cached = await WeeklySummary.findOne(scope);
+    if (cached && req.query.refresh !== "true" && Date.now() - cached.generatedAt.getTime() < DAY_MS) {
+      return res.json({
+        summary: cached.text, stats: cached.stats, generatedAt: cached.generatedAt, cached: true,
+      });
+    }
+
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - WEEK_MS);
+    const prevWindowStart = new Date(now.getTime() - 2 * WEEK_MS);
+
+    const [thisWeekSessions, prevWeekSessions, medications, healthScoreDoc] = await Promise.all([
+      Session.find({ ...scope, createdAt: { $gte: windowStart } }),
+      Session.find({ ...scope, createdAt: { $gte: prevWindowStart, $lt: windowStart } }),
+      Medication.find({ ...scope, active: true }),
+      HealthScore.findOne(scope),
+    ]);
+
+    const sessionCount = thisWeekSessions.length;
+
+    const avgOf = (sessions) => {
+      const withSeverity = sessions.filter((s) => typeof s.severityScore === "number");
+      if (!withSeverity.length) return null;
+      return withSeverity.reduce((a, s) => a + s.severityScore, 0) / withSeverity.length;
+    };
+    const avgSeverityRaw = avgOf(thisWeekSessions);
+    const avgSeverity = avgSeverityRaw != null ? +avgSeverityRaw.toFixed(1) : null;
+    const prevAvgSeverity = avgOf(prevWeekSessions);
+
+    // Same +/-0.75 threshold HealthStats.jsx uses for its own trend signal
+    // — kept consistent so the two views never contradict each other.
+    let trend = null;
+    if (avgSeverityRaw != null && prevAvgSeverity != null) {
+      const delta = avgSeverityRaw - prevAvgSeverity;
+      trend = delta > 0.75 ? "worsening" : delta < -0.75 ? "improving" : "steady";
+    }
+
+    const emergencyCount = thisWeekSessions.filter((s) => s.emergencyDetected).length;
+
+    const symptomMap = {};
+    thisWeekSessions.forEach((s) => s.symptoms?.forEach((sym) => {
+      symptomMap[sym.name] = (symptomMap[sym.name] || 0) + 1;
+    }));
+    const topSymptoms = Object.entries(symptomMap).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name);
+
+    const adherences = medications.map((m) => computeAdherence(m, now)).filter((a) => a.trackable);
+    const totalTaken = adherences.reduce((a, c) => a + c.takenCount, 0);
+    const totalExpected = adherences.reduce((a, c) => a + c.expectedCount, 0);
+    const adherencePercentage = totalExpected > 0 ? Math.round((totalTaken / totalExpected) * 100) : null;
+
+    let scoreDelta = null;
+    if (healthScoreDoc?.history?.length) {
+      const weekAgoEntry = healthScoreDoc.history
+        .filter((h) => new Date(h.date).getTime() <= windowStart.getTime())
+        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      if (weekAgoEntry) scoreDelta = healthScoreDoc.currentScore - weekAgoEntry.score;
+    }
+
+    const stats = {
+      sessionCount, avgSeverity, trend, topSymptoms, emergencyCount, adherencePercentage, scoreDelta,
+    };
+
+    const hasAnyData = sessionCount > 0 || adherencePercentage != null || (scoreDelta != null && scoreDelta !== 0);
+    const text = hasAnyData
+      ? await generateWeeklySummary(stats)
+      : "Nothing tracked this week yet — check in on how you're feeling or log a medication dose, and your weekly recap will start building here.";
+
+    const saved = await WeeklySummary.findOneAndUpdate(
+      scope,
+      { text, stats, generatedAt: now },
+      { upsert: true, returnDocument: "after", runValidators: true }
+    );
+
+    res.json({
+      summary: saved.text, stats: saved.stats, generatedAt: saved.generatedAt, cached: false,
+    });
+  } catch (err) {
+    console.error("getWeeklySummary error:", err);
+    res.status(err.statusCode || 500).json({ message: "Failed to generate weekly summary" });
+  }
+};
+
 // ─── Get All Sessions ──────────────────────────────────────────────────────
 const getSessions = async (req, res) => {
   try {
@@ -360,6 +455,7 @@ module.exports = {
   sendMessage,
   sendMessageStream,
   getSummary,
+  getWeeklySummary,
   getSessions,
   getSession,
   assistantChat,

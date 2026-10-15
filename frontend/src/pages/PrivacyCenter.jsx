@@ -9,6 +9,7 @@ import api from '../api/axios';
 import { listTrustedDevices, deleteHealthHistory, downloadMyData } from '../api/account.api';
 import { listDependents } from '../api/dependents.api';
 import { listMedications } from '../api/medications.api';
+import ErrorState from '../components/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ import {
 export default function PrivacyCenter() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [counts, setCounts] = useState({ sessions: 0, dependents: 0, medications: 0, devices: 0 });
 
   const [exporting, setExporting] = useState(false);
@@ -29,6 +31,8 @@ export default function PrivacyCenter() {
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const [sessionsRes, dependents, medications, devices] = await Promise.all([
         api.get('/ai/sessions'),
@@ -43,7 +47,7 @@ export default function PrivacyCenter() {
         devices: devices.length,
       });
     } catch {
-      toast.error('Failed to load privacy overview');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -115,6 +119,12 @@ export default function PrivacyCenter() {
             <Skeleton className="h-[220px] rounded-2xl" />
             <Skeleton className="h-[180px] rounded-2xl" />
           </div>
+        ) : loadError ? (
+          <ErrorState
+            title="We couldn't load your privacy overview"
+            message="Your information is safe."
+            onRetry={load}
+          />
         ) : (
           <>
             {/* Account security */}

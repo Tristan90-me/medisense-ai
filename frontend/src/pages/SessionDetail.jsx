@@ -8,10 +8,15 @@ import { useReactToPrint } from 'react-to-print';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import MLClassifierCard from '../components/MLClassifierCard';
 import AssessmentResults from '../components/AssessmentResults';
 import ShareDialog from '../components/ShareDialog';
+import ReferralDialog from '../components/ReferralDialog';
+
+// Same urgency levels AssessmentResults.jsx gates its own "Find nearby
+// care" CTA on — a referral only makes sense when professional evaluation
+// is actually what's being suggested.
+const REFERRAL_URGENCIES = ['see-doctor', 'urgent-care', 'emergency'];
 
 const SEVERITY_CLASSES = {
   Low: { bg: 'bg-severity-low-bg', fg: 'text-severity-low-fg' },
@@ -167,14 +172,29 @@ export default function SessionDetail() {
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-full">
-            <Printer size={14} /> Print
-          </Button>
-          <Button size="sm" onClick={handleDownloadPdf} disabled={exportingPdf} className="gap-1.5 rounded-full">
-            {exportingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} PDF
-          </Button>
-          {session.diagnosis?.conditions?.length > 0 && <ShareDialog sessionId={session._id} />}
+        {/* Four possible actions now that Share/Referral exist alongside
+            Print/PDF — all icon-only so the row stays compact at phone
+            widths instead of overflowing with text labels. */}
+        <div className="flex shrink-0 gap-1.5">
+          <button
+            onClick={handlePrint}
+            title="Print"
+            className="flex rounded-lg border border-border bg-background p-1.5 text-muted-foreground transition-colors hover:bg-accent"
+          >
+            <Printer size={15} />
+          </button>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={exportingPdf}
+            title="Download PDF"
+            className="flex rounded-lg border border-border bg-background p-1.5 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-60"
+          >
+            {exportingPdf ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+          </button>
+          {session.diagnosis?.conditions?.length > 0 && <ShareDialog sessionId={session._id} iconOnly />}
+          {session.diagnosis?.conditions?.length > 0 && REFERRAL_URGENCIES.includes(session.diagnosis?.seekCareUrgency) && (
+            <ReferralDialog session={session} iconOnly />
+          )}
         </div>
       </div>
 

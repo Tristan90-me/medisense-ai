@@ -11,6 +11,7 @@ import FloatingMenu from './components/FloatingMenu';
 import MobileNav from './components/MobileNav';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallPrompt from './components/InstallPrompt';
+import BrandedLoader from './components/BrandedLoader';
 
 // Landing is the very first thing an unauthenticated visitor sees, so it
 // stays in the main bundle (no waterfall: import -> render). Every other
@@ -32,6 +33,7 @@ const AccountSettings = lazy(() => import('./pages/AccountSettings'));
 const PrivacyCenter = lazy(() => import('./pages/PrivacyCenter'));
 const EmergencyContacts = lazy(() => import('./pages/EmergencyContacts'));
 const Medications = lazy(() => import('./pages/Medications'));
+const Appointments = lazy(() => import('./pages/Appointments'));
 const HealthScoreAchievements = lazy(() => import('./pages/HealthScoreAchievements'));
 const PhotoLog = lazy(() => import('./pages/PhotoLog'));
 const CareFinder = lazy(() => import('./pages/CareFinder'));
@@ -53,14 +55,10 @@ const AdminFlaggedSessions = lazy(() => import('./pages/admin/AdminFlaggedSessio
 const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
 const AdminAnnouncements = lazy(() => import('./pages/admin/AdminAnnouncements'));
 
-// Shared fallback for lazy route chunks — matches PrivateRoute's existing
-// "Loading..." treatment below so a lazy-chunk fetch looks identical to an
-// auth check in progress, not a second, visually distinct spinner.
-const RouteFallback = () => (
-  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-    Loading...
-  </div>
-);
+// Shared fallback for lazy route chunks — matches PrivateRoute's own loading
+// state below so a lazy-chunk fetch looks identical to an auth check in
+// progress, not a second, visually distinct loader.
+const RouteFallback = () => <BrandedLoader />;
 
 // ─── Consumer route guards ──────────────────────────────────────────────────
 // Full-screen flows that hide the phone bottom bar (see MobileNav), so they
@@ -70,11 +68,7 @@ const BOTTOM_BAR_EXEMPT_ROUTES = ['/session', '/onboarding'];
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   const { pathname } = useLocation();
-  if (loading) return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      Loading...
-    </div>
-  );
+  if (loading) return <BrandedLoader />;
   if (!isAuthenticated) return <Navigate to="/login" />;
   const reservesBottomBar = !BOTTOM_BAR_EXEMPT_ROUTES.includes(pathname);
   return (
@@ -152,6 +146,7 @@ function ConsumerApp() {
                   <Route path="/privacy-center" element={<PrivateRoute><PageTransition><PrivacyCenter /></PageTransition></PrivateRoute>} />
                   <Route path="/emergency-contacts" element={<PrivateRoute><PageTransition><EmergencyContacts /></PageTransition></PrivateRoute>} />
                   <Route path="/medications" element={<PrivateRoute><PageTransition><Medications /></PageTransition></PrivateRoute>} />
+                  <Route path="/appointments" element={<PrivateRoute><PageTransition><Appointments /></PageTransition></PrivateRoute>} />
                   <Route path="/health-score" element={<PrivateRoute><PageTransition><HealthScoreAchievements /></PageTransition></PrivateRoute>} />
                   <Route path="/photo-log" element={<PrivateRoute><PageTransition><PhotoLog /></PageTransition></PrivateRoute>} />
                   <Route path="/care-finder" element={<PrivateRoute><PageTransition><CareFinder /></PageTransition></PrivateRoute>} />

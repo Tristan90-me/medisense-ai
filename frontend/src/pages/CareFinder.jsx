@@ -9,7 +9,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
 import {
   ArrowLeft, MapPin, Navigation, Phone, AlertTriangle, LocateFixed, SearchX,
-  Search, Crosshair, X, ExternalLink, Route, Clock,
+  Search, Crosshair, X, ExternalLink, Route, Clock, CalendarPlus,
 } from 'lucide-react';
 import { searchNearby, geocodeSearch, reverseGeocode, getDirections } from '../api/careFinder.api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -317,6 +317,14 @@ export default function CareFinder() {
   };
 
   const clearRoute = () => { setRoute(null); setRouteError(false); };
+
+  // Deep-links into Appointments.jsx with this facility's name/address
+  // pre-filled as the location — a personal tracker entry, not a real
+  // booking with the facility itself.
+  const handleBookAppointment = (facility) => {
+    const location = [facility.name, facility.address].filter(Boolean).join(', ');
+    navigate(`/appointments?location=${encodeURIComponent(location)}`);
+  };
 
   const locationDisplayLabel = locationSource === 'gps' ? 'Your location' : (locationLabel || 'Selected location');
 
@@ -689,8 +697,14 @@ export default function CareFinder() {
                               </a>
                             )}
                             <button
+                              onClick={(e) => { e.stopPropagation(); handleBookAppointment(f); }}
+                              className="ml-auto flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-accent"
+                            >
+                              <CalendarPlus size={11} /> Book
+                            </button>
+                            <button
                               onClick={(e) => { e.stopPropagation(); handleGetDirections(f); }}
-                              className="ml-auto flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                              className="flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                             >
                               <Navigation size={11} /> Directions
                             </button>

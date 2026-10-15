@@ -7,6 +7,8 @@ const Medication = require('../models/Medication');
 const PhotoLog = require('../models/PhotoLog');
 const HealthScore = require('../models/HealthScore');
 const ShareLink = require('../models/ShareLink');
+const Appointment = require('../models/Appointment');
+const WeeklySummary = require('../models/WeeklySummary');
 const { deleteFile } = require('../utils/gridfs');
 
 // Deletes every PhotoLog row for this user AND the GridFS image blob each
@@ -29,6 +31,8 @@ const deleteHealthDataForUser = async (userId) => {
     Medication.deleteMany({ user: userId }),
     HealthScore.deleteMany({ user: userId }),
     ShareLink.deleteMany({ user: userId }),
+    Appointment.deleteMany({ user: userId }),
+    WeeklySummary.deleteMany({ user: userId }),
     deleteAllPhotosForUser(userId),
   ]);
 };
@@ -190,13 +194,14 @@ exports.exportAccountData = async (req, res) => {
     // account owner reading back their own data — the full session
     // including its message transcript belongs in a "give me all my data"
     // export, not just the derived summary fields.
-    const [healthProfiles, dependents, sessions, medications, photoLogs, emergencyContacts] = await Promise.all([
+    const [healthProfiles, dependents, sessions, medications, photoLogs, emergencyContacts, appointments] = await Promise.all([
       HealthProfile.find({ user: userId }),
       Dependent.find({ owner: userId }),
       Session.find({ user: userId }),
       Medication.find({ user: userId }),
       PhotoLog.find({ user: userId }),
       mongoose.models.EmergencyContact ? mongoose.models.EmergencyContact.find({ user: userId }) : [],
+      Appointment.find({ user: userId }),
     ]);
 
     res.setHeader('Content-Disposition', `attachment; filename="medisense-my-data-${Date.now()}.json"`);
@@ -209,6 +214,7 @@ exports.exportAccountData = async (req, res) => {
       medications,
       photoLogs,
       emergencyContacts,
+      appointments,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

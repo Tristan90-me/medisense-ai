@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const {
   startSession, sendMessage, sendMessageStream, getSummary,
-  getSessions, getSession, assistantChat,
+  getWeeklySummary, getSessions, getSession, assistantChat,
 } = require('../controllers/aiController');
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const {
   startSessionRules, sendMessageRules, sessionIdParamRules, assistantChatRules,
+  weeklySummaryQueryRules,
 } = require('../validators/aiValidators');
 
 /**
@@ -149,6 +150,36 @@ router.post('/session/message/stream', protect, validate(sendMessageRules), send
  *       404: { description: Session not found or not owned by this user }
  */
 router.get('/session/:id/summary', protect, validate(sessionIdParamRules), getSummary);
+
+/**
+ * @swagger
+ * /ai/weekly-summary:
+ *   get:
+ *     tags: [AI]
+ *     summary: Get an AI-generated recap of the last 7 days of tracked activity
+ *     description: >
+ *       Narrates real tracked data only (session count, severity trend vs. the
+ *       prior 7 days, top symptoms, medication adherence, health-score
+ *       movement) — never figures invented by the model. Cached per
+ *       (user, dependent) and regenerated at most once every 24 hours unless
+ *       refresh=true is passed. Returns a canned "nothing tracked yet"
+ *       message, with no LLM call, when there is no real data for the week.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: dependent
+ *         schema: { type: string }
+ *         description: Optional dependent id to get the recap for, instead of the caller.
+ *       - in: query
+ *         name: refresh
+ *         schema: { type: boolean }
+ *         description: Force regeneration even if a fresh cached recap exists.
+ *     responses:
+ *       200: { description: Generated recap text plus the underlying stats it was built from }
+ *       401: { description: Missing or invalid token }
+ *       404: { description: The given dependent isn't owned by the caller }
+ */
+router.get('/weekly-summary', protect, validate(weeklySummaryQueryRules), getWeeklySummary);
 
 /**
  * @swagger

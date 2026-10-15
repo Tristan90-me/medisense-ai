@@ -39,6 +39,7 @@ app.use('/api/dependents', require('./routes/dependents'));
 app.use('/api/emergency-contacts', require('./routes/emergencyContacts'));
 app.use('/api/account', require('./routes/account'));
 app.use('/api/medications', require('./routes/medications'));
+app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/health-score', require('./routes/healthScore'));
 app.use('/api/care-finder', require('./routes/careFinder'));
 app.use('/api/photo-log', require('./routes/photoLog'));

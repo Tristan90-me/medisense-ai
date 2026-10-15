@@ -1,4 +1,4 @@
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 
 exports.startSessionRules = [
   body('mode').optional().isIn(['quick', 'full']).withMessage('mode must be quick or full'),
@@ -17,4 +17,9 @@ exports.sessionIdParamRules = [
 exports.assistantChatRules = [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 4000 }).withMessage('Message is too long'),
   body('history').optional().isArray().withMessage('history must be an array'),
+];
+
+exports.weeklySummaryQueryRules = [
+  query('dependent').optional({ nullable: true }).isMongoId().withMessage('Invalid dependent id'),
+  query('refresh').optional().isBoolean().withMessage('refresh must be a boolean'),
 ];

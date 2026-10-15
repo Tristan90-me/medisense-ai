@@ -5,17 +5,19 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Pill, Plus, Pencil, Trash2,
+  ArrowLeft, Pill, Plus, Pencil, Trash2, Clock, Check, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
-  listMedications, createMedication, updateMedication, deleteMedication,
+  listMedications, createMedication, updateMedication, deleteMedication, logDose,
 } from '../api/medications.api';
 import { listDependents } from '../api/dependents.api';
+import ErrorState from '../components/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -53,6 +55,30 @@ const parseReminderTimes = (value) => (value || '')
   .map((t) => t.trim())
   .filter(Boolean);
 
+// Soonest reminder time from now, in the browser's local time — wraps to
+// tomorrow's earliest time once every slot today has passed. reminderTimes
+// are plain "HH:mm" wall-clock strings with no stored timezone, so "now" is
+// read as whatever the viewer's own clock says, same as the reminder times
+// were presumably entered in.
+const nextDoseLabel = (medication) => {
+  if (!medication.active || !medication.reminderTimes?.length) return null;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const sorted = medication.reminderTimes
+    .map((t) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    })
+    .sort((a, b) => a - b);
+  const upcoming = sorted.find((mins) => mins > nowMinutes);
+  const nextMinutes = upcoming ?? sorted[0];
+  const isTomorrow = upcoming === undefined;
+  const d = new Date();
+  d.setHours(Math.floor(nextMinutes / 60), nextMinutes % 60, 0, 0);
+  const display = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return isTomorrow ? `${display} tomorrow` : display;
+};
+
 export default function Medications() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -61,10 +87,12 @@ export default function Medications() {
   const [medications, setMedications] = useState([]);
   const [dependents, setDependents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loggingDoseId, setLoggingDoseId] = useState(null);
 
   const form = useForm({
     resolver: zodResolver(medicationSchema),
@@ -74,12 +102,14 @@ export default function Medications() {
   });
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const [meds, deps] = await Promise.all([listMedications(), listDependents()]);
       setMedications(meds);
       setDependents(deps);
     } catch {
-      toast.error('Failed to load medications');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -197,8 +227,21 @@ export default function Medications() {
     }
   };
 
+  const handleLogDose = async (medication) => {
+    setLoggingDoseId(medication._id);
+    try {
+      const updated = await logDose(medication._id);
+      setMedications((prev) => prev.map((m) => (m._id === medication._id ? updated : m)));
+      toast.success('Dose logged');
+    } catch {
+      toast.error('Failed to log dose');
+    } finally {
+      setLoggingDoseId(null);
+    }
+  };
+
   const totalCount = medications.length;
-  const isEmpty = !loading && totalCount === 0;
+  const isEmpty = !loading && !loadError && totalCount === 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -237,6 +280,14 @@ export default function Medications() {
           </div>
         )}
 
+        {!loading && loadError && (
+          <ErrorState
+            title="We couldn't load your medications"
+            message="Your information is safe."
+            onRetry={load}
+          />
+        )}
+
         {isEmpty && (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
             <p className="text-4xl">💊</p>
@@ -250,7 +301,7 @@ export default function Medications() {
           </div>
         )}
 
-        {!loading && !isEmpty && groups.map((group) => (
+        {!loading && !loadError && !isEmpty && groups.map((group) => (
           <div key={group.id || 'self'} className="flex flex-col gap-2.5">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               {group.label}
@@ -258,49 +309,94 @@ export default function Medications() {
             {group.items.length === 0 && (
               <p className="text-xs text-muted-foreground">No medications for {group.label}.</p>
             )}
+
+            {group.items.filter((m) => m.active).length >= 2 && (
+              <div className="flex items-start gap-2 rounded-xl border border-severity-moderate/30 bg-severity-moderate-bg/40 px-3.5 py-3 text-[12px] leading-relaxed text-severity-moderate-fg">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                <p>
+                  <span className="font-semibold">Potential interaction.</span> These medications may interact —
+                  discuss with a pharmacist or doctor before changing how you take them.
+                </p>
+              </div>
+            )}
+
             <AnimatePresence mode="popLayout">
-              {group.items.map((m, i) => (
-                <motion.div
-                  key={m._id}
-                  layout
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.97 }}
-                  transition={{ duration: 0.25, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <Card className="rounded-2xl border-border/70 py-0 shadow-sm">
-                    <CardContent className="flex items-center justify-between gap-3 px-[18px] py-4">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{m.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {[m.dosage, m.frequency].filter(Boolean).join(' · ') || 'No dosage/frequency set'}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Switch
-                          checked={!!m.active}
-                          onCheckedChange={(checked) => toggleActive(m, checked)}
-                          aria-label={`Toggle ${m.name} active`}
-                        />
-                        <button
-                          onClick={() => openEdit(m)}
-                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
-                          aria-label={`Edit ${m.name}`}
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          onClick={() => setDeleting(m)}
-                          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          aria-label={`Remove ${m.name}`}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
+              {group.items.map((m, i) => {
+                const nextDose = nextDoseLabel(m);
+                const adherence = m.adherence;
+                return (
+                  <motion.div
+                    key={m._id}
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.25, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <Card className="rounded-2xl border-border/70 shadow-sm">
+                      <CardContent className="flex flex-col gap-2.5 px-[18px] py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">{m.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {[m.dosage, m.frequency].filter(Boolean).join(' · ') || 'No dosage/frequency set'}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={!!m.active}
+                            onCheckedChange={(checked) => toggleActive(m, checked)}
+                            aria-label={`Toggle ${m.name} active`}
+                            className="shrink-0"
+                          />
+                        </div>
+
+                        {nextDose && (
+                          <p className="flex items-center gap-1.5 text-xs text-foreground">
+                            <Clock size={12} className="shrink-0 text-primary" />
+                            Next dose <span className="font-medium">{nextDose}</span>
+                          </p>
+                        )}
+
+                        {adherence?.trackable && adherence.percentage !== null && (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                              <span>Adherence (7 days)</span>
+                              <span className="font-medium text-foreground">{adherence.percentage}%</span>
+                            </div>
+                            <Progress value={adherence.percentage} className="h-1.5" />
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 pt-0.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleLogDose(m)}
+                            disabled={loggingDoseId === m._id}
+                            className="gap-1.5 rounded-full"
+                          >
+                            <Check size={13} /> {loggingDoseId === m._id ? 'Logging...' : 'Mark as taken'}
+                          </Button>
+                          <button
+                            onClick={() => openEdit(m)}
+                            className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"
+                            aria-label={`Edit ${m.name}`}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => setDeleting(m)}
+                            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            aria-label={`Remove ${m.name}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           </div>
         ))}

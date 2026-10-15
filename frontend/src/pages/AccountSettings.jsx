@@ -12,6 +12,7 @@ import {
   getAccount, updateAccount, changePassword, listTrustedDevices,
   revokeTrustedDevice, deleteAccount,
 } from '../api/account.api';
+import ErrorState from '../components/ErrorState';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,7 @@ export default function AccountSettings() {
   const { logout } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
 
@@ -72,11 +74,13 @@ export default function AccountSettings() {
   });
 
   const loadAccount = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const user = await getAccount();
       profileForm.reset({ name: user.name, email: user.email });
     } catch {
-      toast.error('Failed to load account details');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -181,6 +185,12 @@ export default function AccountSettings() {
             <Skeleton className="h-10 rounded-xl" />
             <Skeleton className="h-[220px] rounded-2xl" />
           </div>
+        ) : loadError ? (
+          <ErrorState
+            title="We couldn't load your account"
+            message="Your information is safe."
+            onRetry={loadAccount}
+          />
         ) : (
           <Tabs defaultValue="profile">
             <TabsList className="w-full">
