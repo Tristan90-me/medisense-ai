@@ -59,6 +59,18 @@ exports.getStats = async (req, res) => {
       { $sort: { _id: 1 } },
     ]);
 
+    // Reviewer verdicts, broken down — real counts feeding the "Confirmed
+    // real" dashboard stat, nothing fabricated. Sessions reviewed before
+    // reviewVerdict existed have it as null and are correctly excluded here.
+    const verdictBreakdown = await Session.aggregate([
+      { $match: { reviewVerdict: { $ne: null } } },
+      { $group: { _id: '$reviewVerdict', count: { $sum: 1 } } },
+    ]);
+    const verdictMap = {};
+    verdictBreakdown.forEach((v) => { verdictMap[v._id] = v.count; });
+    const reviewedVerdictCount = Object.values(verdictMap).reduce((a, c) => a + c, 0);
+    const confirmedRealCount = verdictMap.rules_correct || 0;
+
     res.json({
       totalUsers,
       activeUsers,
@@ -76,6 +88,8 @@ exports.getStats = async (req, res) => {
         // split (backend/ml/train.js) — never recomputed per-request, and
         // never fabricated if training metadata is somehow missing.
         mlAccuracy: MODEL_META.evaluation?.accuracy ?? null,
+        reviewedVerdictCount,
+        confirmedRealCount,
       },
     });
   } catch (err) {
@@ -227,11 +241,15 @@ exports.getFlaggedSessions = async (req, res) => {
     const query = { flaggedForReview: true };
     if (status === 'pending') query.reviewedAt = null;
     else if (status === 'reviewed') query.reviewedAt = { $ne: null };
+    // A cross-cutting view, not a third bucket exclusive of the two above —
+    // an escalated session may independently also be pending or reviewed.
+    else if (status === 'escalated') query.escalated = true;
 
     const [sessions, total] = await Promise.all([
       Session.find(query)
         .select('-messages')
         .populate('user', 'name email')
+        .populate('escalatedBy', 'name email')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(Number(limit)),
@@ -247,23 +265,45 @@ exports.getFlaggedSessions = async (req, res) => {
 };
 
 // ── Review a flagged session ────────────────────────────────────────────────
+// verdict === 'escalate' records that a reviewer looked and could not
+// decide — it deliberately does NOT set reviewedBy/reviewedAt/reviewVerdict,
+// so the session keeps surfacing under status=pending for a second reviewer.
+// Any other verdict is a real resolution and sets all of those.
 exports.reviewSession = async (req, res) => {
   try {
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ success: false, message: 'Session not found' });
 
-    const { reviewNotes } = req.body;
-    session.reviewedBy = req.user._id;
-    session.reviewedAt = new Date();
-    session.reviewNotes = reviewNotes || '';
-    await session.save();
+    const { reviewNotes, verdict } = req.body;
 
-    try {
-      await logAdminAction({
-        actor: req.user._id, action: 'session.review', targetType: 'Session', targetId: session._id, metadata: { reviewNotes }, ip: req.ip,
-      });
-    } catch (logErr) {
-      console.error('logAdminAction failed (session.review):', logErr.message);
+    if (verdict === 'escalate') {
+      session.escalated = true;
+      session.escalatedBy = req.user._id;
+      session.escalatedAt = new Date();
+      session.reviewNotes = reviewNotes || session.reviewNotes || '';
+      await session.save();
+
+      try {
+        await logAdminAction({
+          actor: req.user._id, action: 'session.escalate', targetType: 'Session', targetId: session._id, metadata: { reviewNotes }, ip: req.ip,
+        });
+      } catch (logErr) {
+        console.error('logAdminAction failed (session.escalate):', logErr.message);
+      }
+    } else {
+      session.reviewedBy = req.user._id;
+      session.reviewedAt = new Date();
+      session.reviewNotes = reviewNotes || '';
+      session.reviewVerdict = verdict;
+      await session.save();
+
+      try {
+        await logAdminAction({
+          actor: req.user._id, action: 'session.review', targetType: 'Session', targetId: session._id, metadata: { reviewNotes, verdict }, ip: req.ip,
+        });
+      } catch (logErr) {
+        console.error('logAdminAction failed (session.review):', logErr.message);
+      }
     }
 
     res.json({ success: true, session });

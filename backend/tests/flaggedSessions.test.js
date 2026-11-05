@@ -201,7 +201,7 @@ describe('GET /api/admin/sessions/flagged', () => {
 });
 
 describe('PATCH /api/admin/sessions/:id/review', () => {
-  test('sets reviewedBy/reviewedAt/reviewNotes and creates an audit log entry', async () => {
+  test('a real verdict sets reviewedBy/reviewedAt/reviewNotes/reviewVerdict and creates an audit log entry', async () => {
     const admin = await createAdmin();
     const user = await createUser();
     const token = tokenFor(admin);
@@ -211,11 +211,12 @@ describe('PATCH /api/admin/sessions/:id/review', () => {
     const res = await request(app)
       .patch(`/api/admin/sessions/${session._id}/review`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ reviewNotes: 'Looks fine, false alarm.' });
+      .send({ reviewNotes: 'Looks fine, false alarm.', verdict: 'false_alarm' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.session.reviewNotes).toBe('Looks fine, false alarm.');
+    expect(res.body.session.reviewVerdict).toBe('false_alarm');
     expect(res.body.session.reviewedBy).toBe(admin._id.toString());
     expect(res.body.session.reviewedAt).toBeTruthy();
     // Reviewing never clears the permanent flag.
@@ -225,6 +226,87 @@ describe('PATCH /api/admin/sessions/:id/review', () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].targetId.toString()).toBe(session._id.toString());
     expect(logs[0].metadata.reviewNotes).toBe('Looks fine, false alarm.');
+    expect(logs[0].metadata.verdict).toBe('false_alarm');
+  });
+
+  test.each(['rules_correct', 'ai_correct', 'false_alarm'])('accepts verdict %s and persists it', async (verdict) => {
+    const admin = await createAdmin();
+    const user = await createUser();
+    const session = await Session.create({ user: user._id, flaggedForReview: true });
+
+    const res = await request(app)
+      .patch(`/api/admin/sessions/${session._id}/review`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ verdict });
+
+    expect(res.status).toBe(200);
+    expect(res.body.session.reviewVerdict).toBe(verdict);
+  });
+
+  test('omitting verdict is rejected with a validation error', async () => {
+    const admin = await createAdmin();
+    const user = await createUser();
+    const session = await Session.create({ user: user._id, flaggedForReview: true });
+
+    const res = await request(app)
+      .patch(`/api/admin/sessions/${session._id}/review`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ reviewNotes: 'no verdict given' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("verdict: 'escalate' sets escalated/escalatedBy/escalatedAt but leaves reviewedAt/reviewVerdict unset", async () => {
+    const admin = await createAdmin();
+    const user = await createUser();
+    const session = await Session.create({ user: user._id, flaggedForReview: true });
+
+    const res = await request(app)
+      .patch(`/api/admin/sessions/${session._id}/review`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ reviewNotes: 'Not sure, needs a second look.', verdict: 'escalate' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.session.escalated).toBe(true);
+    expect(res.body.session.escalatedBy).toBe(admin._id.toString());
+    expect(res.body.session.escalatedAt).toBeTruthy();
+    expect(res.body.session.reviewedAt).toBeNull();
+    expect(res.body.session.reviewVerdict).toBeNull();
+    // Still shows under status=pending since reviewedAt is untouched.
+    expect(res.body.session.flaggedForReview).toBe(true);
+
+    const logs = await AuditLog.find({ action: 'session.escalate' });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].targetId.toString()).toBe(session._id.toString());
+
+    const pendingList = await request(app)
+      .get('/api/admin/sessions/flagged')
+      .query({ status: 'pending' })
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+    expect(pendingList.body.sessions.map((s) => s._id)).toContain(session._id.toString());
+  });
+
+  test('an escalated session can still later receive a real verdict from a second reviewer', async () => {
+    const firstReviewer = await createAdmin();
+    const secondReviewer = await createAdmin();
+    const user = await createUser();
+    const session = await Session.create({ user: user._id, flaggedForReview: true });
+
+    await request(app)
+      .patch(`/api/admin/sessions/${session._id}/review`)
+      .set('Authorization', `Bearer ${tokenFor(firstReviewer)}`)
+      .send({ verdict: 'escalate' });
+
+    const res = await request(app)
+      .patch(`/api/admin/sessions/${session._id}/review`)
+      .set('Authorization', `Bearer ${tokenFor(secondReviewer)}`)
+      .send({ verdict: 'rules_correct' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.session.reviewVerdict).toBe('rules_correct');
+    expect(res.body.session.reviewedBy).toBe(secondReviewer._id.toString());
+    // escalated stays true — a permanent record, never cleared.
+    expect(res.body.session.escalated).toBe(true);
   });
 
   test('404 for a non-existent session', async () => {
@@ -235,7 +317,7 @@ describe('PATCH /api/admin/sessions/:id/review', () => {
     const res = await request(app)
       .patch(`/api/admin/sessions/${fakeId}/review`)
       .set('Authorization', `Bearer ${token}`)
-      .send({});
+      .send({ verdict: 'false_alarm' });
 
     expect(res.status).toBe(404);
   });
@@ -251,5 +333,29 @@ describe('PATCH /api/admin/sessions/:id/review', () => {
       .send({});
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/sessions/flagged — status=escalated', () => {
+  test('returns only escalated sessions, independent of reviewedAt', async () => {
+    const admin = await createAdmin();
+    const user = await createUser();
+
+    const escalatedPending = await Session.create({ user: user._id, flaggedForReview: true, escalated: true });
+    const escalatedAndReviewed = await Session.create({
+      user: user._id, flaggedForReview: true, escalated: true, reviewedAt: new Date(), reviewedBy: admin._id, reviewVerdict: 'ai_correct',
+    });
+    const notEscalated = await Session.create({ user: user._id, flaggedForReview: true, escalated: false });
+
+    const res = await request(app)
+      .get('/api/admin/sessions/flagged')
+      .query({ status: 'escalated' })
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    const ids = res.body.sessions.map((s) => s._id);
+    expect(ids).toContain(escalatedPending._id.toString());
+    expect(ids).toContain(escalatedAndReviewed._id.toString());
+    expect(ids).not.toContain(notEscalated._id.toString());
   });
 });

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, ShieldAlert, CheckCircle2,
   ChevronLeft, ChevronRight, Filter,
+  ShieldCheck, Brain, HelpCircle, ArrowUpCircle, Check,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -40,6 +41,27 @@ const flagReason = (s) => {
   return 'Flagged';
 };
 
+// A reviewer's structured judgment — turns "mark reviewed" into data instead
+// of a checkbox. 'escalate' is handled as its own footer button, not one of
+// these pills (see submitVerdict): it means "couldn't decide," not a 4th
+// resolution.
+const EMPTY_STATE_SUFFIX = { pending: 'pending review', reviewed: 'reviewed yet', escalated: 'escalated' };
+
+const VERDICT_OPTIONS = [
+  {
+    value: 'rules_correct', icon: ShieldCheck, label: 'Rules were right',
+    desc: 'The rule-based check caught something real the AI under-called.',
+  },
+  {
+    value: 'ai_correct', icon: Brain, label: 'AI was right',
+    desc: "The AI's assessment was correct; the rule-based flag was a false positive.",
+  },
+  {
+    value: 'false_alarm', icon: HelpCircle, label: 'False alarm',
+    desc: 'Neither signal reflected a real concern.',
+  },
+];
+
 export default function AdminFlaggedSessions() {
   const [sessions, setSessions] = useState([]);
   const [total, setTotal] = useState(0);
@@ -51,6 +73,7 @@ export default function AdminFlaggedSessions() {
 
   const [reviewing, setReviewing] = useState(null);
   const [notes, setNotes] = useState('');
+  const [verdict, setVerdict] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -74,17 +97,21 @@ export default function AdminFlaggedSessions() {
   const openReview = (session) => {
     setReviewing(session);
     setNotes(session.reviewNotes || '');
+    setVerdict(session.reviewVerdict || null);
   };
 
-  const submitReview = async () => {
+  // Shared by the "Submit review" button (a VERDICT_OPTIONS value) and the
+  // "Escalate" button ('escalate', which the controller branches on before
+  // ever touching reviewVerdict — see adminController.js's reviewSession).
+  const submitVerdict = async (v) => {
     setSaving(true);
     try {
-      await adminApi.patch(`/admin/sessions/${reviewing._id}/review`, { reviewNotes: notes });
-      toast.success('Session marked as reviewed');
+      await adminApi.patch(`/admin/sessions/${reviewing._id}/review`, { reviewNotes: notes, verdict: v });
+      toast.success(v === 'escalate' ? 'Session escalated for a second opinion' : 'Session marked as reviewed');
       setReviewing(null);
       load();
     } catch {
-      toast.error('Failed to save review');
+      toast.error(v === 'escalate' ? 'Failed to escalate session' : 'Failed to save review');
     } finally {
       setSaving(false);
     }
@@ -115,6 +142,7 @@ export default function AdminFlaggedSessions() {
               <SelectContent>
                 <SelectItem value="pending">Pending review</SelectItem>
                 <SelectItem value="reviewed">Reviewed</SelectItem>
+                <SelectItem value="escalated">Escalated</SelectItem>
                 <SelectItem value="all">All flagged</SelectItem>
               </SelectContent>
             </Select>
@@ -130,7 +158,7 @@ export default function AdminFlaggedSessions() {
           ) : sessions.length === 0 ? (
             <Card className="rounded-[14px] border-dashed border-border/70 py-0 shadow-none">
               <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                No flagged sessions {status === 'pending' ? 'pending review' : status === 'reviewed' ? 'reviewed yet' : ''}.
+                No flagged sessions {EMPTY_STATE_SUFFIX[status] || ''}.
               </CardContent>
             </Card>
           ) : sessions.map((s) => (
@@ -148,6 +176,11 @@ export default function AdminFlaggedSessions() {
                   {s.severityLevel && (
                     <Badge className={SEVERITY_BADGE[s.severityLevel] || 'bg-muted text-muted-foreground'}>
                       {s.severityLevel}
+                    </Badge>
+                  )}
+                  {s.escalated && (
+                    <Badge className="gap-1 bg-secondary/10 text-secondary">
+                      <ArrowUpCircle size={11} /> Escalated
                     </Badge>
                   )}
                   {s.reviewedAt ? (
@@ -195,7 +228,7 @@ export default function AdminFlaggedSessions() {
               ) : sessions.length === 0 ? (
                 <tr>
                   <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                    No flagged sessions {status === 'pending' ? 'pending review' : status === 'reviewed' ? 'reviewed yet' : ''}.
+                    No flagged sessions {EMPTY_STATE_SUFFIX[status] || ''}.
                   </TableCell>
                 </tr>
               ) : (
@@ -225,13 +258,20 @@ export default function AdminFlaggedSessions() {
                       ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>
-                      {s.reviewedAt ? (
-                        <Badge className="gap-1 bg-severity-low-bg text-severity-low-fg">
-                          <CheckCircle2 size={11} /> Reviewed
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-severity-moderate-bg text-severity-moderate-fg">Pending</Badge>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {s.escalated && (
+                          <Badge className="gap-1 bg-secondary/10 text-secondary">
+                            <ArrowUpCircle size={11} /> Escalated
+                          </Badge>
+                        )}
+                        {s.reviewedAt ? (
+                          <Badge className="gap-1 bg-severity-low-bg text-severity-low-fg">
+                            <CheckCircle2 size={11} /> Reviewed
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-severity-moderate-bg text-severity-moderate-fg">Pending</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(s.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -287,6 +327,11 @@ export default function AdminFlaggedSessions() {
                       Previously reviewed {new Date(reviewing.reviewedAt).toLocaleString()}
                     </p>
                   )}
+                  {reviewing.escalated && (
+                    <p className="mt-1.5 flex items-center gap-1 text-xs text-secondary">
+                      <ArrowUpCircle size={12} /> Escalated by {reviewing.escalatedBy?.name || 'a reviewer'} on {new Date(reviewing.escalatedAt).toLocaleString()}
+                    </p>
+                  )}
                   <p className="mt-1.5 text-xs text-muted-foreground">
                     Session ID: <span className="font-mono">{reviewing._id}</span>
                     {' · '}Started {new Date(reviewing.createdAt).toLocaleString()}
@@ -315,6 +360,38 @@ export default function AdminFlaggedSessions() {
                     )}
                   </div>
                 )}
+                <div>
+                  <p className="mb-2 text-sm font-medium text-foreground">Your verdict</p>
+                  <div role="radiogroup" aria-label="Verdict" className="flex flex-col gap-1.5">
+                    {VERDICT_OPTIONS.map((opt) => {
+                      const Icon = opt.icon;
+                      const selected = verdict === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setVerdict(opt.value)}
+                          className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                            selected ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent'
+                          }`}
+                        >
+                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                            selected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                          }`}>
+                            <Icon size={15} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-foreground">{opt.label}</p>
+                            <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                          </div>
+                          {selected && <Check size={16} className="shrink-0 text-primary" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-foreground">Review notes</label>
                   <Textarea
@@ -327,8 +404,16 @@ export default function AdminFlaggedSessions() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setReviewing(null)}>Cancel</Button>
-                <Button onClick={submitReview} disabled={saving}>
-                  {saving ? 'Saving...' : 'Mark reviewed'}
+                <Button
+                  variant="outline"
+                  className="gap-1.5 border-secondary/40 text-secondary hover:bg-secondary/10 hover:text-secondary"
+                  onClick={() => submitVerdict('escalate')}
+                  disabled={saving}
+                >
+                  <ArrowUpCircle size={14} /> Escalate
+                </Button>
+                <Button onClick={() => submitVerdict(verdict)} disabled={saving || !verdict}>
+                  {saving ? 'Saving...' : 'Submit review'}
                 </Button>
               </DialogFooter>
             </>

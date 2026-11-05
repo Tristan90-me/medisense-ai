@@ -65,4 +65,26 @@ describe('GET /api/admin/stats — aiSafety block', () => {
       .set('Authorization', `Bearer ${tokenFor(user)}`);
     expect(res.status).toBe(403);
   });
+
+  test('aiSafety.reviewedVerdictCount/confirmedRealCount reflect real verdicts and exclude legacy null-verdict reviews', async () => {
+    const admin = await createAdmin();
+    const user = await createUser();
+
+    await Session.create({ user: user._id, flaggedForReview: true, reviewVerdict: 'rules_correct', reviewedAt: new Date(), reviewedBy: admin._id });
+    await Session.create({ user: user._id, flaggedForReview: true, reviewVerdict: 'rules_correct', reviewedAt: new Date(), reviewedBy: admin._id });
+    await Session.create({ user: user._id, flaggedForReview: true, reviewVerdict: 'ai_correct', reviewedAt: new Date(), reviewedBy: admin._id });
+    await Session.create({ user: user._id, flaggedForReview: true, reviewVerdict: 'false_alarm', reviewedAt: new Date(), reviewedBy: admin._id });
+    // Legacy review from before reviewVerdict existed — reviewedAt is set but reviewVerdict is null.
+    await Session.create({ user: user._id, flaggedForReview: true, reviewedAt: new Date(), reviewedBy: admin._id });
+    // Escalated but not yet resolved — no verdict at all.
+    await Session.create({ user: user._id, flaggedForReview: true, escalated: true });
+
+    const res = await request(app)
+      .get('/api/admin/stats')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.aiSafety.reviewedVerdictCount).toBe(4);
+    expect(res.body.aiSafety.confirmedRealCount).toBe(2);
+  });
 });

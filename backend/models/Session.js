@@ -77,6 +77,23 @@ const sessionSchema = new mongoose.Schema(
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reviewedAt: { type: Date, default: null },
     reviewNotes: { type: String, default: '' },
+    // Reviewer's structured judgment — separate from reviewNotes (free
+    // text). Only set when a real resolution is chosen (not an escalation);
+    // stays null for sessions reviewed before this field existed and for
+    // escalated-but-unresolved sessions. No migration needed — legacy
+    // reviews are simply excluded from verdict-derived stats, the same
+    // treatment promptVersion gives sessions from before it existed.
+    reviewVerdict: { type: String, enum: ['rules_correct', 'ai_correct', 'false_alarm'], default: null },
+    // Escalation is orthogonal to reviewedAt/reviewVerdict, not a 4th
+    // verdict: it means "a reviewer looked and could not decide," so it
+    // must NOT close the case — reviewedAt/reviewedBy/reviewVerdict stay
+    // unset so the session keeps surfacing under status=pending. Never
+    // cleared once set (same permanent-record philosophy as
+    // flaggedForReview) — a session can be escalated and later still get a
+    // real verdict from a second reviewer.
+    escalated: { type: Boolean, default: false },
+    escalatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    escalatedAt: { type: Date, default: null },
     // Third independent signal (Phase 9) alongside the LLM's own severity
     // (utils/gemini.js) and the rule-based triage layer (utils/triage.js) —
     // a locally-run Naive Bayes classifier, see ml/symptomClassifier.js.

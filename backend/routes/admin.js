@@ -171,8 +171,11 @@ router.get('/sessions', validate(listSessionsRules), getAllSessions);
  *         schema: { type: integer, minimum: 1, maximum: 100 }
  *       - in: query
  *         name: status
- *         schema: { type: string, enum: [pending, reviewed] }
- *         description: pending = reviewedAt is null, reviewed = reviewedAt is set.
+ *         schema: { type: string, enum: [pending, reviewed, escalated] }
+ *         description: >
+ *           pending = reviewedAt is null, reviewed = reviewedAt is set,
+ *           escalated = escalated is true (a cross-cutting view — an
+ *           escalated session may also independently be pending or reviewed).
  *     responses:
  *       200: { description: Paginated list of flagged sessions }
  *       403: { description: Authenticated but not an admin }
@@ -184,8 +187,15 @@ router.get('/sessions/flagged', validate(flaggedSessionsQueryRules), getFlaggedS
  * /admin/sessions/{id}/review:
  *   patch:
  *     tags: [Admin]
- *     summary: Mark a flagged session as reviewed
- *     description: Sets reviewedBy/reviewedAt/reviewNotes. Does NOT clear flaggedForReview — that flag is a permanent historical record.
+ *     summary: Record a reviewer's verdict on a flagged session, or escalate it
+ *     description: >
+ *       verdict: "rules_correct" | "ai_correct" | "false_alarm" sets
+ *       reviewedBy/reviewedAt/reviewNotes/reviewVerdict — a real resolution.
+ *       verdict: "escalate" instead sets escalated/escalatedBy/escalatedAt
+ *       and leaves reviewedAt/reviewVerdict untouched, so the session stays
+ *       in the pending queue for a second reviewer. Does NOT clear
+ *       flaggedForReview, or ever clear escalated once set — both are
+ *       permanent historical records.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -193,15 +203,18 @@ router.get('/sessions/flagged', validate(flaggedSessionsQueryRules), getFlaggedS
  *         required: true
  *         schema: { type: string }
  *     requestBody:
- *       required: false
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [verdict]
  *             properties:
+ *               verdict: { type: string, enum: [rules_correct, ai_correct, false_alarm, escalate] }
  *               reviewNotes: { type: string, maxLength: 1000 }
  *     responses:
  *       200: { description: Updated session }
+ *       400: { description: Validation error — verdict is required }
  *       404: { description: Session not found }
  */
 router.patch('/sessions/:id/review', validate([...sessionIdParamRules, ...reviewSessionRules]), reviewSession);

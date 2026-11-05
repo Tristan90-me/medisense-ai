@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Activity, AlertTriangle, Calendar, ShieldAlert, Flag, Clock, Cpu,
+  Users, Activity, AlertTriangle, Calendar, ShieldAlert, Flag, Clock, Cpu, CheckCircle2,
 } from 'lucide-react';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
@@ -94,6 +94,17 @@ export default function AdminDashboard() {
       icon: <Cpu size={18} />, iconBg: 'bg-secondary/10', iconFg: 'text-secondary',
       hint: 'Held-out test accuracy', onClick: () => navigate('/admin/model-evaluation'),
     },
+    {
+      // Derived from reviewer verdicts (see adminController.js's
+      // verdictBreakdown aggregate) — '—' until at least one verdict has
+      // been recorded, never a fabricated percentage.
+      label: 'Confirmed real (reviewed)',
+      value: stats.aiSafety.reviewedVerdictCount > 0
+        ? `${Math.round((stats.aiSafety.confirmedRealCount / stats.aiSafety.reviewedVerdictCount) * 100)}%`
+        : '—',
+      icon: <CheckCircle2 size={18} />, iconBg: 'bg-severity-low-bg', iconFg: 'text-severity-low-fg',
+      hint: 'Share of reviewed flags where rules caught a real miss',
+    },
   ] : [];
 
   return (
@@ -144,7 +155,7 @@ export default function AdminDashboard() {
                 variants={statVariants}
                 initial="hidden"
                 animate="show"
-                className="grid grid-cols-2 gap-2.5 sm:grid-cols-4"
+                className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5"
               >
                 {aiSafetyCards.map((s, i) => (
                   <motion.div key={i} variants={statItem}>
