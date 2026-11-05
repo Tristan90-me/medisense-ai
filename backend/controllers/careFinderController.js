@@ -46,24 +46,50 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // One attempt at the underlying fetch — pulled out of fetchOsm so retrying
 // is just "call this again," not a second copy of the timeout/abort setup.
-const fetchOsmOnce = async (url, options) => {
+//
+// Confirmed necessary live, not theoretical: a mirror attempt started
+// vanishing from this app's own [careFinder] logs mid-loop with no failure
+// ever recorded for it, and no later mirror in the list ever got tried
+// either — consistent with a DNS lookup that never settles blocking past
+// AbortController entirely (a real Node/undici gap: the abort signal
+// reliably interrupts the HTTP layer, but not every stage of resolving a
+// hostname underneath it). The Promise.race below is a hard backstop that
+// doesn't depend on fetch's own cancellation working: whatever is actually
+// hanging, this function always settles within FETCH_TIMEOUT_MS + 2s, so
+// one bad mirror can never silently swallow the rest of the list.
+const fetchOsmOnce = (url, options) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: { 'User-Agent': USER_AGENT, ...options.headers },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const err = new Error(`${url} responded ${response.status} ${response.statusText}`);
-      err.status = response.status;
-      throw err;
+  const doFetch = async () => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: { 'User-Agent': USER_AGENT, ...options.headers },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const err = new Error(`${url} responded ${response.status} ${response.statusText}`);
+        err.status = response.status;
+        throw err;
+      }
+      return await response.json();
+    } finally {
+      clearTimeout(timeout);
     }
-    return await response.json();
-  } finally {
-    clearTimeout(timeout);
-  }
+  };
+  // A plain setTimeout-based reject, not sleep().then(() => throw) — that
+  // version left its timer running for the full duration even after
+  // doFetch() already won the race, which both leaked a timer per attempt
+  // and, worse, turned into an unhandled promise rejection once it finally
+  // fired with nothing listening anymore. clearTimeout below in .finally()
+  // cancels it the instant either side of the race settles.
+  let backstopTimer;
+  const hardBackstop = new Promise((_, reject) => {
+    backstopTimer = setTimeout(() => {
+      reject(new Error(`${url} did not settle within ${FETCH_TIMEOUT_MS + 2000}ms (hard timeout — AbortSignal did not resolve it)`));
+    }, FETCH_TIMEOUT_MS + 2000);
+  });
+  return Promise.race([doFetch(), hardBackstop]).finally(() => clearTimeout(backstopTimer));
 };
 
 // Shared by every OSM-ecosystem call this controller makes (Overpass,
@@ -104,12 +130,17 @@ const fetchOverpass = async (query) => {
     body: `data=${encodeURIComponent(query)}`,
   };
   for (const url of OVERPASS_URLS) {
+    // Logged before the attempt (not just on failure) so a hung mirror that
+    // never even settles the hard backstop above still leaves a trace of
+    // exactly where the loop got stuck, instead of silence.
+    console.error(`[careFinder] trying Overpass mirror: ${url}`);
     try {
       return await fetchOsmOnce(url, options);
     } catch (err) {
       console.error(`[careFinder] Overpass mirror failed (${url}): ${err.message}`);
     }
   }
+  console.error('[careFinder] all Overpass mirrors exhausted');
   return null;
 };
 
