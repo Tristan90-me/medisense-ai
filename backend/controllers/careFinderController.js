@@ -4,21 +4,31 @@ const { haversineKm } = require('../utils/geo');
 // requests low-volume and always bound them with a timeout so a slow/down
 // instance can never hang this endpoint.
 //
-// The main instance is explicitly documented (OSM wiki) as "currently
-// experiencing overload issues," and that's not theoretical — confirmed
-// live while diagnosing a production 502: two successful requests followed
-// immediately by a 429. The OSM wiki lists several other free, no-API-key,
-// global-coverage mirrors, but only this second one actually answered a
-// real query when live-tested from here — overpass.private.coffee and
-// overpass.kumi.systems both timed out completely (no response at all)
-// across repeated attempts, so they're not included: a mirror that never
-// responds only costs a wasted timeout on the way to the next one, with no
-// upside. maps.mail.ru is itself inconsistent (seen anywhere from ~1.5s to
-// ~15s, and one outright 504), but "sometimes works" still beats retrying
-// an instance that just rate-limited us.
+// Confirmed from real production logs (Render), not guesswork: the bare
+// overpass-api.de hostname failed with a generic "fetch failed" — a
+// connection-level failure (DNS/TCP/TLS), not a timeout — on every single
+// attempt over several minutes straight. That hostname round-robins across
+// several backend nodes; lz4/z below address two of those nodes directly,
+// in case Render's resolver was just landing on one dead entry in that
+// round-robin pool. maps.mail.ru IS reachable from the same network but is
+// itself overloaded (alternates between our own 15s abort and an explicit
+// 504 from its own upstream) — "sometimes works" still beats an instance
+// that never responds, so it stays, just no longer first. overpass.osm.ch
+// is a separate, independently-run public instance — added for a genuinely
+// different point of failure rather than another path into the same
+// provider's infrastructure; it hasn't been live-tested from this app yet,
+// so watch its own [careFinder] log lines after this ships. The original
+// bare hostname stays last, in case DNS ever round-robins back to a live
+// node. overpass.private.coffee and overpass.kumi.systems were tried
+// previously and timed out completely (no response at all) across repeated
+// attempts — left out, since a mirror that never responds only costs a
+// wasted timeout with no upside.
 const OVERPASS_URLS = [
-  'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
 ];
 // Nominatim (OSM's free geocoder) and OSRM's public demo routing server —
 // same no-key, fair-use, be-polite-with-a-User-Agent deal as Overpass above.
