@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
-  startSession, sendMessage, sendMessageStream, getSummary,
+  startSession, abandonSession, sendMessage, sendMessageStream, getSummary,
   getWeeklySummary, getSessions, getSession, assistantChat,
 } = require('../controllers/aiController');
 const { protect } = require('../middleware/auth');
@@ -210,6 +210,31 @@ router.get('/sessions', protect, getSessions);
  *       404: { description: Session not found or not owned by this user }
  */
 router.get('/session/:id', protect, validate(sessionIdParamRules), getSession);
+
+/**
+ * @swagger
+ * /ai/session/{id}/abandon:
+ *   patch:
+ *     tags: [AI]
+ *     summary: Stop an in-progress session from being auto-resumed
+ *     description: >
+ *       Lets a user explicitly discard an active session so starting a new
+ *       one doesn't silently drop them back into it. Never loses data —
+ *       every message is already persisted turn-by-turn, so an abandoned
+ *       session stays fully visible via session history. A no-op (not an
+ *       error) when the session isn't currently active, so callers never
+ *       need to check its status first.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: The session, with status set to abandoned if it was active }
+ *       404: { description: Session not found or not owned by this user }
+ */
+router.patch('/session/:id/abandon', protect, validate(sessionIdParamRules), abandonSession);
 
 /**
  * @swagger

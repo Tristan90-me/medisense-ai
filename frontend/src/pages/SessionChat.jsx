@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useSession } from '../context/SessionContext';
 import useVoice from '../hooks/useVoice';
@@ -17,10 +18,14 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import {
   Mic, MicOff, Volume2, VolumeX, Send, AlertTriangle,
-  Phone, Mail, ArrowLeft, Activity, ShieldAlert, Check,
+  Phone, Mail, ArrowLeft, Activity, ShieldAlert, Check, RotateCcw,
 } from 'lucide-react';
 
 // Same urgency levels AssessmentResults.jsx gates its own "Find nearby
@@ -122,6 +127,8 @@ export default function SessionChat() {
   const [showSummary, setShowSummary] = useState(false);
   const [emergencyContacts, setEmergencyContacts] = useState([]);
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(() => {
     try {
       return localStorage.getItem(AI_CONSENT_KEY) === '1';
@@ -140,91 +147,13 @@ export default function SessionChat() {
 
   const voice = useVoice();
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  useEffect(() => {
-    if (voice.transcript) setInput(voice.transcript);
-  }, [voice.transcript]);
-
-  // Lazy-fetch emergency contacts only the first time `emergency` flips to
-  // true — guarded by a ref so it never refetches on subsequent renders or
-  // re-triggers of the same session, and never fetches unconditionally on
-  // page load for sessions that never flag an emergency.
-  useEffect(() => {
-    if (emergency && !contactsFetchedRef.current) {
-      contactsFetchedRef.current = true;
-      listEmergencyContacts()
-        .then((data) => setEmergencyContacts(data))
-        .catch(() => setEmergencyContacts([]))
-        .finally(() => setContactsLoaded(true));
-    }
-  }, [emergency]);
-
-  useEffect(() => {
-    // Guards against React StrictMode's intentional dev-only double-invoke
-    // of effects — without this, local development double-fires the
-    // session-start POST (and, worse, the preloaded-symptom auto-send),
-    // since this effect has real side effects and nothing to meaningfully
-    // cancel/clean up on the simulated unmount between the two invocations.
-    if (initRanRef.current) return;
-    initRanRef.current = true;
-
-    const init = async () => {
-      try {
-        const res = await api.post('/ai/session/start', { mode, dependentId: dependentId || undefined });
-        const s = res.data.session;
-        setSession(s);
-        setActiveSession(s);
-
-        // Best-effort — a failure here shouldn't block the chat itself.
-        if (photoId) linkPhotoSession(photoId, s._id).catch(() => {});
-
-        if (res.data.resumed && s.messages?.length) {
-          setMessages(s.messages);
-          if (s.severityScore) setSeverity({ score: s.severityScore, level: s.severityLevel });
-          if (s.ruleBasedTriage?.level) setRuleBasedTriage(s.ruleBasedTriage);
-          if (s.severityMismatch) setSeverityMismatch(true);
-          if (s.mlClassification?.condition) setMlClassification(s.mlClassification);
-          if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
-          if (s.symptoms?.length) setSessionSymptoms(s.symptoms);
-          if (s.emergencyDetected) setEmergency(true);
-          if (s.lastProgressPhase) {
-            const idx = currentPhases.indexOf(s.lastProgressPhase);
-            if (idx !== -1) setPhaseIndex(idx);
-          }
-        } else {
-          const greeting = {
-            role: 'assistant',
-            content: mode === 'full'
-              ? `Hello ${user?.name?.split(' ')[0] || 'there'}! I'm going to do a thorough health assessment with you today. I'll ask you about 10–15 questions to understand your symptoms fully. What's been bothering you?`
-              : `Hi ${user?.name?.split(' ')[0] || 'there'}! Tell me what symptoms you're experiencing and I'll help you understand what might be going on.`,
-          };
-          setMessages([greeting]);
-          if (voice.voiceEnabled) voice.speak(greeting.content);
-
-          if (preloadedSymptoms && s) {
-            setTimeout(() => {
-              sendMessage(preloadedSymptoms, s);
-            }, 800);
-          }
-        }
-      } catch (err) {
-        console.error('Session init failed', err);
-      } finally {
-        setInitializing(false);
-      }
-    };
-    init();
-  }, []);
-
   // sessionOverride exists for the auto-send-on-mount path below: the
   // setTimeout there fires from the initial-render closure of this function,
   // whose `session` state was still null at that point (state updates from
   // the same effect don't retroactively change an already-captured closure).
   // Passing the freshly-fetched session directly sidesteps that stale value
-  // instead of relying on the (stale) component state.
+  // instead of relying on the (stale) component state. Declared here, before
+  // beginFreshConversation/the init effect below, since both reference it.
   const sendMessage = async (text, sessionOverride) => {
     const activeSession = sessionOverride || session;
     const content = (text || input).trim();
@@ -306,6 +235,130 @@ export default function SessionChat() {
         inputRef.current?.focus();
       },
     });
+  };
+
+  // Shared by the mount-time init effect (a brand-new session) and
+  // startNewChat below (a manual reset) — the opening greeting plus the
+  // optional preloaded-symptoms auto-send, which only ever applies to the
+  // very first load: a manual reset deliberately never re-triggers it, that
+  // one-time deep-link intent shouldn't repeat every time someone resets.
+  const beginFreshConversation = (s, { autoSendPreloaded = false } = {}) => {
+    const greeting = {
+      role: 'assistant',
+      content: mode === 'full'
+        ? `Hello ${user?.name?.split(' ')[0] || 'there'}! I'm going to do a thorough health assessment with you today. I'll ask you about 10–15 questions to understand your symptoms fully. What's been bothering you?`
+        : `Hi ${user?.name?.split(' ')[0] || 'there'}! Tell me what symptoms you're experiencing and I'll help you understand what might be going on.`,
+    };
+    setMessages([greeting]);
+    if (voice.voiceEnabled) voice.speak(greeting.content);
+
+    if (autoSendPreloaded && preloadedSymptoms && s) {
+      setTimeout(() => {
+        sendMessage(preloadedSymptoms, s);
+      }, 800);
+    }
+  };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (voice.transcript) setInput(voice.transcript);
+  }, [voice.transcript]);
+
+  // Lazy-fetch emergency contacts only the first time `emergency` flips to
+  // true — guarded by a ref so it never refetches on subsequent renders or
+  // re-triggers of the same session, and never fetches unconditionally on
+  // page load for sessions that never flag an emergency.
+  useEffect(() => {
+    if (emergency && !contactsFetchedRef.current) {
+      contactsFetchedRef.current = true;
+      listEmergencyContacts()
+        .then((data) => setEmergencyContacts(data))
+        .catch(() => setEmergencyContacts([]))
+        .finally(() => setContactsLoaded(true));
+    }
+  }, [emergency]);
+
+  useEffect(() => {
+    // Guards against React StrictMode's intentional dev-only double-invoke
+    // of effects — without this, local development double-fires the
+    // session-start POST (and, worse, the preloaded-symptom auto-send),
+    // since this effect has real side effects and nothing to meaningfully
+    // cancel/clean up on the simulated unmount between the two invocations.
+    if (initRanRef.current) return;
+    initRanRef.current = true;
+
+    const init = async () => {
+      try {
+        const res = await api.post('/ai/session/start', { mode, dependentId: dependentId || undefined });
+        const s = res.data.session;
+        setSession(s);
+        setActiveSession(s);
+
+        // Best-effort — a failure here shouldn't block the chat itself.
+        if (photoId) linkPhotoSession(photoId, s._id).catch(() => {});
+
+        if (res.data.resumed && s.messages?.length) {
+          setMessages(s.messages);
+          if (s.severityScore) setSeverity({ score: s.severityScore, level: s.severityLevel });
+          if (s.ruleBasedTriage?.level) setRuleBasedTriage(s.ruleBasedTriage);
+          if (s.severityMismatch) setSeverityMismatch(true);
+          if (s.mlClassification?.condition) setMlClassification(s.mlClassification);
+          if (s.diagnosis?.conditions?.length) setDiagnosis(s.diagnosis);
+          if (s.symptoms?.length) setSessionSymptoms(s.symptoms);
+          if (s.emergencyDetected) setEmergency(true);
+          if (s.lastProgressPhase) {
+            const idx = currentPhases.indexOf(s.lastProgressPhase);
+            if (idx !== -1) setPhaseIndex(idx);
+          }
+        } else {
+          beginFreshConversation(s, { autoSendPreloaded: true });
+        }
+      } catch (err) {
+        console.error('Session init failed', err);
+      } finally {
+        setInitializing(false);
+      }
+    };
+    init();
+  }, []);
+
+  // Abandons the current session (a no-op server-side if it's already
+  // completed/abandoned — see aiController.js's abandonSession) so the
+  // next /session/start call actually creates a fresh one instead of
+  // resuming this one, then resets every piece of conversation state and
+  // shows the same opening greeting a first-time visit would. Never loses
+  // anything: every message so far is already persisted, so the old
+  // conversation stays fully visible in session history.
+  const startNewChat = async () => {
+    setResetting(true);
+    try {
+      if (session?._id) await api.patch(`/ai/session/${session._id}/abandon`);
+      const res = await api.post('/ai/session/start', { mode, dependentId: dependentId || undefined });
+      const s = res.data.session;
+      setSession(s);
+      setActiveSession(s);
+      setSessionSymptoms([]);
+      setSeverity(null);
+      setRuleBasedTriage(null);
+      setSeverityMismatch(false);
+      setMlClassification(null);
+      setDiagnosis(null);
+      setSuggestions([]);
+      setPhaseIndex(-1);
+      setActiveWidget(null);
+      setEmergency(false);
+      setShowSummary(false);
+      setInput('');
+      beginFreshConversation(s);
+    } catch {
+      toast.error('Could not start a new check-in. Please try again.');
+    } finally {
+      setResetting(false);
+      setConfirmResetOpen(false);
+    }
   };
 
   const primaryContacts = emergencyContacts.filter((c) => c.isPrimary);
@@ -460,6 +513,16 @@ export default function SessionChat() {
             aria-label={voice.voiceEnabled ? 'Mute AI voice' : 'Enable AI voice'}
           >
             {voice.voiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setConfirmResetOpen(true)}
+            disabled={loading || resetting}
+            title="Start a new check-in"
+            aria-label="Start a new check-in"
+          >
+            <RotateCcw size={16} />
           </Button>
         </div>
       </div>
@@ -678,6 +741,23 @@ export default function SessionChat() {
           onClose={() => setShowSummary(false)}
         />
       )}
+
+      <AlertDialog open={confirmResetOpen} onOpenChange={(open) => !resetting && setConfirmResetOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start a new check-in?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your current conversation is saved to your session history — starting a new one won't lose anything.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Keep chatting</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); startNewChat(); }} disabled={resetting}>
+              {resetting ? 'Starting...' : 'Start new check-in'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

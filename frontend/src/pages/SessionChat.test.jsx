@@ -13,7 +13,7 @@ import { streamSessionMessage } from '../api/stream';
 // in the test-suite report.
 
 vi.mock('../api/axios', () => ({
-  default: { post: vi.fn() },
+  default: { post: vi.fn(), patch: vi.fn() },
 }));
 
 vi.mock('../api/stream', () => ({
@@ -61,6 +61,7 @@ describe('SessionChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.post.mockResolvedValue({ data: { session: { _id: 'sess1' }, resumed: false } });
+    api.patch.mockResolvedValue({ data: { session: { _id: 'sess1', status: 'abandoned' } } });
     streamSessionMessage.mockResolvedValue(undefined);
     // The one-time AI-assessment consent modal blocks all chat interaction
     // until accepted — pre-accept it here so the other tests exercise chat
@@ -123,6 +124,29 @@ describe('SessionChat', () => {
     await user.type(input, '   {Enter}');
 
     expect(streamSessionMessage).not.toHaveBeenCalled();
+  });
+
+  it('starting a new check-in abandons the old session and starts a fresh one', async () => {
+    const user = userEvent.setup();
+    render(<SessionChat />);
+    await screen.findByText(/tell me what symptoms you're experiencing/i);
+
+    // The reset's /ai/session/start call returns a genuinely different
+    // session id, just like the real backend does once the old one is
+    // abandoned — confirms the UI picks up the NEW session.
+    api.post.mockResolvedValueOnce({ data: { session: { _id: 'sess2' }, resumed: false } });
+
+    await user.click(screen.getByRole('button', { name: /start a new check-in/i }));
+    expect(screen.getByText(/start a new check-in\?/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^start new check-in$/i }));
+
+    expect(api.patch).toHaveBeenCalledWith('/ai/session/sess1/abandon');
+    expect(api.post).toHaveBeenLastCalledWith('/ai/session/start', { mode: 'quick' });
+    expect(mockSetActiveSession).toHaveBeenLastCalledWith({ _id: 'sess2' });
+    // The dialog closes and the same opening greeting reappears.
+    expect(screen.queryByText(/start a new check-in\?/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/tell me what symptoms you're experiencing/i)).toBeInTheDocument();
   });
 
   it('blocks the chat behind a one-time AI consent notice until accepted', async () => {

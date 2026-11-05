@@ -67,6 +67,31 @@ const startSession = async (req, res) => {
   }
 };
 
+// ─── Abandon Session ────────────────────────────────────────────────────────
+// Lets a user explicitly stop an in-progress session from being auto-resumed
+// by startSession's existing lookup above, so "start new chat" actually
+// starts a new one instead of being silently dropped back into the old,
+// unfinished one. A no-op (not an error) when the session isn't currently
+// active — the frontend calls this unconditionally on every reset,
+// regardless of status, so it never needs its own branching. Every message
+// in an active session is already persisted turn-by-turn (see sendMessage/
+// sendMessageStream below), so this never loses data — it just stops the
+// session from being resumed; it stays visible via session history.
+const abandonSession = async (req, res) => {
+  try {
+    const session = await Session.findOne({ _id: req.params.id, user: req.user.id });
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    if (session.status === "active") {
+      session.status = "abandoned";
+      await session.save();
+    }
+    res.json({ session });
+  } catch (err) {
+    console.error("abandonSession error:", err);
+    res.status(err.statusCode || 500).json({ message: "Failed to abandon session" });
+  }
+};
+
 // ─── Send Message ──────────────────────────────────────────────────────────
 const sendMessage = async (req, res) => {
   try {
@@ -466,6 +491,7 @@ const assistantChat = async (req, res) => {
 
 module.exports = {
   startSession,
+  abandonSession,
   sendMessage,
   sendMessageStream,
   getSummary,
